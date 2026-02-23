@@ -26,4 +26,7 @@ def create_app(config_object=None):
     from .core import bp as core_bp
     app.register_blueprint(core_bp)
 
+    from .categorization import bp as categorization_bp
+    app.register_blueprint(categorization_bp, url_prefix='/categorization')
+
     return app
