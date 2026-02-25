@@ -9,5 +9,5 @@ def categorize(request: CategorizationRequest):
     result = service.extract(request.text)
     return TransactionExtractionResponse(**result)
 
-# http://127.0.0.1:8000/categorization/categorize
+# http://127.0.0.1:8000/api/v1/categorization/categorize
 
