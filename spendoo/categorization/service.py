@@ -3,7 +3,7 @@
 from fastapi import HTTPException
 import json
 from spendoo.core.llm_client import LLMClient
-from spendoo.categorization.models import CATEGORY_ID_MAP, CategoryEnum
+from spendoo.categorization.models import category_block
 import re
 
 def clean_json_response(response: str):
@@ -22,14 +22,19 @@ class CategorizationService:
         prompt = f"""
         You are a financial receipt parser.
 
-        From the text below, extract all transaction items.
+        Extract all transaction items from the text below.
 
         For each item return:
+        - id (incremental starting from 1 in order of appearance)
         - item_name
         - quantity (if not mentioned assume 1)
         - unit_price
         - total_price (quantity × unit_price)
-        - category from {', '.join([c.value for c in CategoryEnum])}
+        - category_id (choose one id from the list below)
+
+        Available categories:
+        {category_block}
+
 
         Also calculate grand_total (sum of total_price).
 
@@ -40,11 +45,13 @@ class CategorizationService:
         {{
             "items": [
                 {{
+                    "id": 1,
                     "item_name": "...",
                     "quantity": 1,
                     "unit_price": 0,
                     "total_price": 0,
-                    "category": null
+                    "category": "...",
+                    "category_id": null
                 }}
             ],
             "grand_total": 0
@@ -66,25 +73,9 @@ class CategorizationService:
                 detail="Model returned invalid JSON"
             )
 
-        # Add incremental IDs safely
         for idx, item in enumerate(data["items"], start=1):
             item["id"] = idx
-            category_name = item.get("category")
-            if category_name is None:
-                item["category_id"] = None
-            else:
-                item["category_id"] = CATEGORY_ID_MAP.get(category_name.lower(), None)
-
+            
         return data
 
 
-# When saving transaction:
-
-# transaction = Transaction(
-#     user_id=user_id,
-#     item_name=item["item_name"],
-#     quantity=item["quantity"],
-#     unit_price=item["unit_price"],
-#     total_price=item["total_price"],
-#     category_id=item["category_id"]
-# )
