@@ -73,8 +73,6 @@ class CategorizationService:
                 detail="Model returned invalid JSON"
             )
 
-        for idx, item in enumerate(data["items"], start=1):
-            item["id"] = idx
             
         return data
 
