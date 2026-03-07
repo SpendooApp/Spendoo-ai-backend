@@ -1,6 +1,13 @@
-from spendoo import create_app
+from fastapi import FastAPI, APIRouter
+from spendoo.categorization.routes import router as categorization_router
 
 
-if __name__ == '__main__':
-    app = create_app()
-    app.run(debug=True)
+app = FastAPI(title="Spendoo API")
+
+api_v1_router = APIRouter(prefix="/api/v1")
+
+api_v1_router.include_router(categorization_router)
+
+app.include_router(api_v1_router)
+
+
