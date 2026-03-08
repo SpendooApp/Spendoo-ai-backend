@@ -23,5 +23,13 @@ jobs:
 
       - name: Test Docker image
         run: |
-          docker run --rm \
-            -e GROQ_API_KEY=${{ secrets.GROQ_API_KEY }} -e SPENDOO_DEPLOY=${{ secrets.SPENDOO_DEPLOY }} -e SPENDOO_ALLOWED_IP=${{ secrets.SPENDOO_ALLOWED_IP }} spendoo-ai-backend pytest
+          # Start container in background
+          docker run -d --name spendoo-test \
+            -e GROQ_API_KEY=${{ secrets.GROQ_API_KEY }} -e SPENDOO_DEPLOY=${{ secrets.SPENDOO_DEPLOY }} -e SPENDOO_ALLOWED_IP=${{ secrets.SPENDOO_ALLOWED_IP }} -p 8000:8000 spendoo-ai-backend
+          # Wait for FastAPI to start
+          sleep 10
+          # Check health endpoint
+          curl --fail http://localhost:8000/docs
+          # Stop and remove container
+          docker stop spendoo-test
+          docker rm spendoo-test
