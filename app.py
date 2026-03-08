@@ -7,21 +7,29 @@ from spendoo.forecasting.routes import router as forecasting_router
 from spendoo.chatbot.routes import router as chatbot_router
 from spendoo.core.ip_middleware import IPRestrictionMiddleware
 
-app = FastAPI(title="Spendoo API")
-
-# Add IP restriction middleware (only in production)
 import os
 
-if os.getenv("SPENDOO_DEPLOY", "false").lower() == "true":
-    app.add_middleware(IPRestrictionMiddleware)
 
-api_v1_router = APIRouter(prefix="/api/v1")
+def create_app() -> FastAPI:
+    app = FastAPI(title="Spendoo API")
 
-api_v1_router.include_router(categorization_router)
-api_v1_router.include_router(voice_router)
-api_v1_router.include_router(core_router)
-api_v1_router.include_router(ocr_router)
-api_v1_router.include_router(forecasting_router)
-api_v1_router.include_router(chatbot_router)
+    # Add IP restriction middleware (only in production)
+    if os.getenv("SPENDOO_DEPLOY", "false").lower() == "true":
+        app.add_middleware(IPRestrictionMiddleware)
 
-app.include_router(api_v1_router)
+    # Versioned API router
+    api_v1_router = APIRouter(prefix="/api/v1")
+
+    api_v1_router.include_router(categorization_router)
+    api_v1_router.include_router(voice_router)
+    api_v1_router.include_router(core_router)
+    api_v1_router.include_router(ocr_router)
+    api_v1_router.include_router(forecasting_router)
+    api_v1_router.include_router(chatbot_router)
+
+    app.include_router(api_v1_router)
+
+    return app
+
+
+app = create_app()
