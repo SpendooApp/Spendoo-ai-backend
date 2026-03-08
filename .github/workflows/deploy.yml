@@ -31,5 +31,5 @@ jobs:
             docker stop spendoo-ai-container || true
             docker rm spendoo-ai-container || true
             docker run -d --restart=always --name spendoo-ai-container -p 8000:8000 \
-              -e GROQ_API_KEY="${{ secrets.GROQ_API_KEY }}" -e SPENDOO_DEPLOY="${{ secrets.SPENDOO_DEPLOY }} -e SPENDOO_ALLOWED_IP="${{ secrets.SPENDOO_ALLOWED_IP }}" josephsameh/spendoo-ai-backend:latest
+              -e GROQ_API_KEY="${{ secrets.GROQ_API_KEY }}" -e SPENDOO_DEPLOY="${{ secrets.SPENDOO_DEPLOY }}" -e SPENDOO_ALLOWED_IP="${{ secrets.SPENDOO_ALLOWED_IP }}" josephsameh/spendoo-ai-backend:latest
             docker image prune -f
