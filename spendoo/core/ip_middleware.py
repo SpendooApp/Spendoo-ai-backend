@@ -6,7 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 import os
 
-ALLOWED_IPS = os.getenv("SPENDOO_ALLOWED_IP", "127.0.0.1").split(",")
+ALLOWED_IPS = os.getenv("SPENDOO_ALLOWED_IP", "127.0.0.1,172.17.0.1").split(",")
 
 
 class IPRestrictionMiddleware(BaseHTTPMiddleware):
