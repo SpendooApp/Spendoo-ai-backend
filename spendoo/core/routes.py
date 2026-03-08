@@ -1,14 +1,13 @@
-from . import bp
-from flask import jsonify
+from fastapi import APIRouter
+
+router = APIRouter(prefix="/core", tags=["core"])
 
 
-@bp.route('/')
+@router.get("/")
 def index():
-    # preserve behavior from the original single-file app
-    return 'Hello World!'
+    return "Hello World!"
 
 
-@bp.route('/health', methods=['GET'])
+@router.get("/health")
 def health():
-    return jsonify(status='ok')
-
+    return {"status": "ok"}

@@ -1,13 +1,13 @@
-from . import bp
-from flask import jsonify
+from fastapi import APIRouter
+
+router = APIRouter(prefix="/chatbot", tags=["chatbot"])
 
 
-@bp.route('/', methods=['GET'])
+@router.get("/")
 def info():
-    return jsonify(module='chatbot', status='ok')
+    return {"module": "chatbot", "status": "ok"}
 
 
-@bp.route('/health', methods=['GET'])
+@router.get("/health")
 def health():
-    return jsonify(status='ok')
-
+    return {"status": "ok"}
