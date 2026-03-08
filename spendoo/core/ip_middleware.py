@@ -21,7 +21,7 @@ class IPRestrictionMiddleware(BaseHTTPMiddleware):
         ):
             return await call_next(request)
         # Restrict other endpoints to ALLOWED_IPS
-        client_ip = request.client.host
+        client_ip = request.headers.get("x-forwarded-for", request.client.host).split(",")[0]
         if client_ip not in ALLOWED_IPS:
             return JSONResponse(
                 status_code=403, content={"detail": "Forbidden: IP not allowed"}
