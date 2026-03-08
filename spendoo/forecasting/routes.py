@@ -1,13 +1,13 @@
-from . import bp
-from flask import jsonify
+from fastapi import APIRouter
+
+router = APIRouter(prefix="/forecasting", tags=["forecasting"])
 
 
-@bp.route('/', methods=['GET'])
+@router.get("/")
 def info():
-    return jsonify(module='forecasting', status='ok')
+    return {"module": "forecasting", "status": "ok"}
 
 
-@bp.route('/health', methods=['GET'])
+@router.get("/health")
 def health():
-    return jsonify(status='ok')
-
+    return {"status": "ok"}
