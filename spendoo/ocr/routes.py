@@ -1,13 +1,19 @@
-from . import bp
-from flask import jsonify
+from fastapi import APIRouter, UploadFile, HTTPException
+import base64
+from spendoo.ocr.pipeline import ReceiptPipeline
 
+router = APIRouter(prefix="/ocr", tags=["OCR"])
 
-@bp.route('/', methods=['GET'])
-def info():
-    return jsonify(module='ocr', status='ok')
+pipeline = ReceiptPipeline()
 
+@router.post("/scan")
+async def scan_receipt(file: UploadFile):
 
-@bp.route('/health', methods=['GET'])
-def health():
-    return jsonify(status='ok')
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload an image.")
+    
+    image_bytes = await file.read()
 
+    result = pipeline.process_receipt(image_bytes)
+
+    return result
