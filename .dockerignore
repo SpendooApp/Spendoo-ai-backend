@@ -1,0 +1,16 @@
+# .dockerignore for Spendoo-ai-backend
+
+**pycache**/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+*.log
+.env
+.venv/
+tests/
+static/
+templates/
+.git/
+README.md
