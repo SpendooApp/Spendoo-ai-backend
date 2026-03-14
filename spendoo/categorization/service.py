@@ -19,7 +19,6 @@ class CategorizationService:
 
     def extract(self, text: str):
 
-        print("CategorizationService received text:", text)  # Debugging log
         prompt = f"""
         You are a financial receipt parser.
 

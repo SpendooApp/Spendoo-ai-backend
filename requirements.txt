@@ -4,4 +4,4 @@ pytest-flask>=1.2
 openai>=1.0,<2
 fastapi>=0.68,<1
 uvicorn>=0.15,<1
-
+mistralai==1.12.4
