@@ -15,7 +15,7 @@ class CategorizationService:
 
     def __init__(self):
         self.llm = LLMClient()
-        self.model_name = "openai/gpt-oss-20b"
+        self.model_name = "openai/gpt-oss-120b"
 
     def extract(self, text: str):
 
@@ -24,19 +24,17 @@ class CategorizationService:
 
         Extract all transaction items from the text below.
 
-        For each item return:
+        For each item try to return:
         - id (incremental starting from 1 in order of appearance)
         - item_name
-        - quantity (if not mentioned assume 1)
-        - unit_price
-        - total_price (quantity × unit_price)
+        - price 
         - category_id (choose one id from the list below)
 
         Available categories:
         {category_block}
 
 
-        Also calculate grand_total (sum of total_price).
+        Also calculate grand_total or extract it if it's explicitly mentioned in the text. If you can't find a clear grand total, sum up the item prices.
 
         If no suitable category exists return null.
 
@@ -47,9 +45,7 @@ class CategorizationService:
                 {{
                     "id": 1,
                     "item_name": "...",
-                    "quantity": 1,
-                    "unit_price": 0,
-                    "total_price": 0,
+                    "price": 0,
                     "category": "...",
                     "category_id": null
                 }}

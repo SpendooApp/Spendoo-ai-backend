@@ -1,13 +1,19 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, UploadFile, HTTPException
+import base64
+from spendoo.ocr.pipeline import ReceiptPipeline
 
-router = APIRouter(prefix="/ocr", tags=["ocr"])
+router = APIRouter(prefix="/ocr", tags=["OCR"])
 
+pipeline = ReceiptPipeline()
 
-@router.get("/")
-def info():
-    return {"module": "ocr", "status": "ok"}
+@router.post("/scan")
+async def scan_receipt(file: UploadFile):
 
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload an image.")
+    
+    image_bytes = await file.read()
 
-@router.get("/health")
-def health():
-    return {"status": "ok"}
+    result = pipeline.process_receipt(image_bytes)
+
+    return result
