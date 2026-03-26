@@ -26,7 +26,7 @@ class CategorizationService:
 
         For each item try to return:
         - id (incremental starting from 1 in order of appearance)
-        - item_name
+        - item_name exactly as it appears in the text (avoid interpreting it, just extract the name)
         - price 
         - category_id (choose one id from the list below)
 
