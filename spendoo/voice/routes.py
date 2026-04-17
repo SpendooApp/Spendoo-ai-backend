@@ -1,30 +1,24 @@
 from fastapi import APIRouter, UploadFile, HTTPException
-from spendoo.voice.service import VoiceService
-from spendoo.categorization.service import CategorizationService
+from spendoo.core.services import ServiceContainer
 import os
+from spendoo.voice.config import settings
 
 router = APIRouter(prefix="/voice", tags=["Voice"])
 
-voice_service = VoiceService()
-categorization_service = CategorizationService()
-
-ALLOWED_EXTENSIONS = {".wav", ".mp3", ".ogg", ".m4a", ".flac", ".webm"}
-
-MAX_SIZE = 25 * 1024 * 1024
-
+voice_service = ServiceContainer.get_voice_service()
+categorization_service = ServiceContainer.get_categorization_service()
 
 @router.post("/process")
 async def process_voice(file: UploadFile):
 
-
     ext = os.path.splitext(file.filename)[1].lower()
 
-    if ext not in ALLOWED_EXTENSIONS:
+    if ext not in settings.allowed_extensions:
         raise HTTPException(400, "Unsupported audio format")
 
     audio_bytes = await file.read()
 
-    if len(audio_bytes) > MAX_SIZE:
+    if len(audio_bytes) > settings.max_size:
         raise HTTPException(400, "Audio file too large (max 25MB)")
 
     text = voice_service.transcribe(audio_bytes, file.filename)

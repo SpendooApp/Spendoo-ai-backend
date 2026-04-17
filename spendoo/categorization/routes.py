@@ -1,8 +1,8 @@
+from spendoo.core.services import ServiceContainer
 from .models import CategorizationRequest, TransactionExtractionResponse
-from spendoo.categorization.service import CategorizationService
 from fastapi import APIRouter
 
-service = CategorizationService()
+service = ServiceContainer.get_categorization_service()
 router = APIRouter(prefix="/categorization", tags=["categorization"])
 
 
