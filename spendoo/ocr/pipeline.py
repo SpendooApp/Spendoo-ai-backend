@@ -1,5 +1,4 @@
 from spendoo.core.services import ServiceContainer
-import base64
 
 class ReceiptPipeline:
 
@@ -10,11 +9,10 @@ class ReceiptPipeline:
 
     def process_receipt(self, image_bytes):
 
-        base64_image = base64.b64encode(image_bytes).decode("utf-8")
         # Step 1: OCR
-        receipt_text = self.ocr.extract_text(base64_image)
+        receipt_text = self.ocr.extract_text(image_bytes)
 
         # Step 2: LLM extraction
-        structured_data = self.extractor.extract(receipt_text)
+        structured_data = self.extractor.extract(str(receipt_text))
 
         return structured_data
