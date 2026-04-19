@@ -26,8 +26,9 @@ class CategorizationService:
 
         For each item try to return:
         - id (incremental starting from 1 in order of appearance)
-        - item_name
+        - item_name exactly as it appears in the text (avoid interpreting it, just extract the name) but without any additional descriptions or measurements if they are mentioned in the same line.
         - price 
+        - category (choose one category from the list below that best fits the item based on its description, if you are unsure make it null)
         - category_id (choose one id from the list below)
 
         Available categories:

@@ -1,13 +1,12 @@
-from spendoo.ocr.service import OCRService
-from spendoo.categorization.service import CategorizationService
+from spendoo.core.services import ServiceContainer
 import base64
 
 class ReceiptPipeline:
 
     def __init__(self):
 
-        self.ocr = OCRService()
-        self.extractor = CategorizationService()
+        self.ocr = ServiceContainer.get_ocr_service()
+        self.extractor = ServiceContainer.get_categorization_service()
 
     def process_receipt(self, image_bytes):
 

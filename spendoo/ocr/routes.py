@@ -1,5 +1,4 @@
 from fastapi import APIRouter, UploadFile, HTTPException
-import base64
 from spendoo.ocr.pipeline import ReceiptPipeline
 
 router = APIRouter(prefix="/ocr", tags=["OCR"])
