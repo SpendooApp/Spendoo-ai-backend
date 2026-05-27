@@ -18,9 +18,3 @@ class ServiceContainer:
         if cls._ocr_service is None:
             cls._ocr_service = OCRService()
         return cls._ocr_service
-
-    @classmethod
-    def get_categorization_service(cls) -> CategorizationService:
-        if cls._categorization_service is None:
-            cls._categorization_service = CategorizationService()
-        return cls._categorization_service

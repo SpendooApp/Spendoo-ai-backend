@@ -1,5 +1,1 @@
-# Forecasting repository placeholder
-
-def fetch_forecast():
-    return {}
-
+from spendoo.core.models import TransactionORM

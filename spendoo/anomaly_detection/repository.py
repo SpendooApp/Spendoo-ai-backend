@@ -1,0 +1,1 @@
+from spendoo.core.models import TransactionORM

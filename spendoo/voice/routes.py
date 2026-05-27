@@ -1,15 +1,20 @@
-from fastapi import APIRouter, UploadFile, HTTPException
+import uuid
+
+from fastapi import APIRouter, UploadFile, HTTPException, Depends
+from sqlalchemy.orm import Session
+from spendoo.core.database import get_db
 from spendoo.core.services import ServiceContainer
-import os
+from spendoo.categorization.service import CategorizationService
 from spendoo.core.config import settings
+import os
+
 
 router = APIRouter(prefix="/voice", tags=["Voice"])
 
 voice_service = ServiceContainer.get_voice_service()
-categorization_service = ServiceContainer.get_categorization_service()
 
-@router.post("/process")
-async def process_voice(file: UploadFile):
+@router.post("/process/{user_id}")
+async def process_voice(file: UploadFile, user_id: uuid.UUID, db: Session = Depends(get_db)):
 
     ext = os.path.splitext(file.filename)[1].lower()
 
@@ -23,6 +28,8 @@ async def process_voice(file: UploadFile):
 
     text = voice_service.transcribe(audio_bytes, file.filename)
 
-    result = categorization_service.extract(text)
+    categorization_service = CategorizationService(db)
+
+    result = categorization_service.extract(text, user_id)
 
     return result
