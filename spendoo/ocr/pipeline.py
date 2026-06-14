@@ -12,10 +12,12 @@ class ReceiptPipeline:
     def process_receipt(self, image_bytes, db: Session, user_id: uuid.UUID):
 
         # Step 1: OCR
-        receipt_text = self.ocr.extract_text(image_bytes)
+        receipt_text, model_name = self.ocr.extract_text(image_bytes)
 
         # Step 2: LLM extraction
         categorization_service = CategorizationService(db)
         structured_data = categorization_service.extract(str(receipt_text), user_id)
+        
+        structured_data["ocr_model"] = model_name
 
         return structured_data
