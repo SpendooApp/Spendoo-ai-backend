@@ -65,13 +65,13 @@ class OCRService:
         for model in self.geminiModels:
             try:
                 items = self.try_gemini_ocr(model, image_bytes)
-                return items
+                return items, model
             except Exception as e:
                 continue
         
         # Final fallback: Mistral OCR pipeline
         try:
             items = self.try_mistral(image_bytes)
-            return items
+            return items, "mistral-ocr-latest"
         except Exception as e:
             raise RuntimeError("Receipt extraction failed across all models.") from e
