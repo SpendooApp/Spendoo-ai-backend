@@ -1,10 +1,9 @@
-# spendoo/categorization/service.py
-
+import json, re, uuid
 from fastapi import HTTPException
-import json
+from sqlalchemy.orm import Session
+from .repository import CategorizationRepository
+
 from spendoo.core.llm_client import LLMClient
-from spendoo.categorization.models import category_block
-import re
 
 def clean_json_response(response: str):
     # Remove ```json and ``` wrappers
@@ -13,11 +12,18 @@ def clean_json_response(response: str):
 
 class CategorizationService:
 
-    def __init__(self):
+    def __init__(self, db: Session):
         self.llm = LLMClient()
+        self.repo = CategorizationRepository(db)
         self.model_name = "openai/gpt-oss-120b"
 
-    def extract(self, text: str):
+    def extract(self, text: str, user_id: uuid.UUID):
+
+        categories = self.repo.get_all_categories(user_id)
+        category_block = "\n".join(
+            f'- id: "{c["id"]}", name: "{c["name"]}"'
+            for c in categories
+        )
 
         prompt = f"""
         You are a financial receipt parser.
@@ -70,7 +76,16 @@ class CategorizationService:
                 detail="Model returned invalid JSON"
             )
 
+        valid_ids = self.repo.get_valid_ids(user_id)
+        for item in data.get("items", []):
+            if item["category_id"] not in valid_ids:
+                print(f"Invalid category_id {item['category_id']} for item {item['item_name']}")
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Model returned invalid category_id {item['category_id']} for item {item['item_name']}"
+                )
             
+
         return data
 
 
