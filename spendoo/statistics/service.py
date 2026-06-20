@@ -286,7 +286,7 @@ class StatisticsService:
                 )
 
             # Use helper to calculate status and percentage
-            percentage, status = self._determine_budget_status(spending, total_budget, income)
+            percentage, status = self._determine_budget_status(spending, total_budget)
 
             b_dto = BudgetStatusBucketDto(
                 spending=spending.quantize(Decimal("1.00")),
@@ -461,7 +461,7 @@ class StatisticsService:
                 highest_value = val
 
             # --- Budget Status Bucket ---
-            percentage, status = self._determine_budget_status(spending, total_budget, income)
+            percentage, status = self._determine_budget_status(spending, total_budget)
 
             bs_dto = BudgetStatusBucketDto(
                 spending=spending.quantize(Decimal("1.00")),
@@ -503,10 +503,9 @@ class StatisticsService:
             end_date = end_date.replace(tzinfo=None)
         return start_date, end_date
 
-    def _determine_budget_status(self, spending: Decimal, total_budget: Decimal, income: Decimal) -> tuple[Decimal, BudgetStatus]:
-        total_limit = total_budget + income
-        if total_limit > 0:
-            percentage = (spending / total_limit) * Decimal("100.00")
+    def _determine_budget_status(self, spending: Decimal, total_budget: Decimal) -> tuple[Decimal, BudgetStatus]:
+        if total_budget > 0:
+            percentage = (spending / total_budget) * Decimal("100.00")
         else:
             percentage = Decimal("100.00") if spending > 0 else Decimal("0.00")
 

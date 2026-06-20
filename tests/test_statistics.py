@@ -518,4 +518,34 @@ def test_income_subtraction_for_category_less_negative_transactions(service):
     assert res.buckets[0].spending == Decimal("0.00")
 
 
+def test_budget_status_ignores_income(service):
+    user_id = uuid.uuid4()
+    cat_id = uuid.uuid4()
+    
+    # Bucket 0: spending = 95.00, budget = 100.00, income = 50.00
+    # If compared with budget + income = 150.00, then 95 / 150 = 63.3% -> within
+    # If compared only with budget = 100.00, then 95 / 100 = 95% -> risk
+    service.repo.get_transactions_in_range.return_value = [
+        # Income transaction (+50.00)
+        TransactionORM(amount=Decimal("50.00"), transaction_date=datetime(2026, 6, 19, 9, 0), user_id=user_id, category_id=cat_id),
+        # Spending transaction (-95.00)
+        TransactionORM(amount=Decimal("-95.00"), transaction_date=datetime(2026, 6, 19, 10, 0), user_id=user_id, category_id=cat_id)
+    ]
+    service.repo.get_overlapping_budgets.return_value = [
+        BudgetORM(category_id=cat_id, amount=Decimal("100.00"), period=1, start_date=datetime(2026, 6, 19), end_date=datetime(2026, 6, 20), is_active=True)
+    ]
+
+    res = service.calculate_budget_status(
+        user_id=user_id,
+        granularity=Granularity.DAY,
+        start_date=datetime(2026, 6, 19),
+        end_date=datetime(2026, 6, 20)
+    )
+
+    assert len(res.buckets) == 1
+    assert res.buckets[0].status == "risk"
+    assert res.buckets[0].percentage == Decimal("95.00")
+
+
+
 
