@@ -9,3 +9,30 @@ def test_core_health(client):
     assert resp.status_code == 200
     assert resp.json() == {'status': 'ok'}
 
+
+def test_ip_restriction_middleware():
+    import os
+    from fastapi.testclient import TestClient
+    from app import create_app
+
+    original_deploy = os.environ.get("SPENDOO_DEPLOY")
+    os.environ["SPENDOO_DEPLOY"] = "true"
+
+    try:
+        app = create_app()
+        client = TestClient(app)
+
+        # Request with a blocked client IP
+        resp = client.get('/api/v1/core/', headers={"x-forwarded-for": "192.168.1.100"})
+        assert resp.status_code == 403
+        assert resp.json() == {"detail": "Forbidden: IP 192.168.1.100 not allowed"}
+
+        # Request with an allowed client IP
+        resp_allowed = client.get('/api/v1/core/', headers={"x-forwarded-for": "127.0.0.1"})
+        assert resp_allowed.status_code == 200
+    finally:
+        if original_deploy is not None:
+            os.environ["SPENDOO_DEPLOY"] = original_deploy
+        else:
+            del os.environ["SPENDOO_DEPLOY"]
+
