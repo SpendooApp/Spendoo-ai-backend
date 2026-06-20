@@ -540,6 +540,8 @@ class StatisticsService:
         categories = self.repo.get_user_categories(user_id)
         cat_map = {c.id: c for c in categories}
 
+        total_spending = sum(curr_spending.values())
+
         cat_dtos = []
         for cat_id, curr_val in curr_spending.items():
             prev_val = prev_spending.get(cat_id, Decimal("0.00"))
@@ -548,6 +550,11 @@ class StatisticsService:
                 pct_change = ((curr_val - prev_val) / prev_val) * Decimal("100.00")
             else:
                 pct_change = Decimal("100.00") if curr_val > 0 else Decimal("0.00")
+
+            if total_spending > 0:
+                contrib_pct = (curr_val / total_spending) * Decimal("100.00")
+            else:
+                contrib_pct = Decimal("0.00")
 
             cat_info = cat_map.get(cat_id)
             cat_name = cat_info.category_name if cat_info else "Unknown"
@@ -558,7 +565,8 @@ class StatisticsService:
                 category_name=cat_name,
                 category_icon=cat_icon,
                 spending=curr_val.quantize(Decimal("1.00")),
-                percentage_change=pct_change.quantize(Decimal("1.00"))
+                percentage_change=pct_change.quantize(Decimal("1.00")),
+                contribution_percentage=contrib_pct.quantize(Decimal("1.00"))
             )
             cat_dtos.append(dto)
 

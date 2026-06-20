@@ -49,6 +49,7 @@ class CategorySpendingDto(BaseModel):
     category_icon: str
     spending: Decimal
     percentage_change: Decimal
+    contribution_percentage: Decimal
 
 class TopCategoriesResponse(BaseModel):
     total_spending: Decimal

@@ -322,10 +322,12 @@ def test_get_top_categories_service(service):
     assert res.top_categories[0].category_name == "Rent"
     assert res.top_categories[0].spending == Decimal("1000.00")
     assert res.top_categories[0].percentage_change == Decimal("100.00")
+    assert res.top_categories[0].contribution_percentage == Decimal("76.92")
     
     assert res.top_categories[1].category_name == "Food"
     assert res.top_categories[1].spending == Decimal("300.00")
     assert res.top_categories[1].percentage_change == Decimal("50.00")
+    assert res.top_categories[1].contribution_percentage == Decimal("23.08")
 
 def test_new_endpoints_api_calls(mock_db):
     app = create_app({'TESTING': True})
@@ -345,7 +347,7 @@ def test_new_endpoints_api_calls(mock_db):
     mock_top_response = TopCategoriesResponse(
         total_spending=Decimal("50.00"),
         top_categories=[
-            CategorySpendingDto(category_id=uuid.uuid4(), category_name="Food", category_icon="fastfood", spending=Decimal("50.00"), percentage_change=Decimal("20.00"))
+            CategorySpendingDto(category_id=uuid.uuid4(), category_name="Food", category_icon="fastfood", spending=Decimal("50.00"), percentage_change=Decimal("20.00"), contribution_percentage=Decimal("100.00"))
         ]
     )
     
@@ -377,6 +379,7 @@ def test_new_endpoints_api_calls(mock_db):
         data = resp.json()
         assert data["total_spending"] == "50.00"
         assert data["top_categories"][0]["category_name"] == "Food"
+        assert data["top_categories"][0]["contribution_percentage"] == "100.00"
         
     finally:
         StatisticsService.calculate_budget_status = original_status
@@ -437,6 +440,7 @@ def test_calculate_combined_stats_service_correctness(service):
     # Previous spending (June 18) = 100.00. Current (June 20) = 150.00.
     # Percentage change = ((150 - 100) / 100) * 100 = +50%
     assert res.top_categories.top_categories[0].percentage_change == Decimal("50.00")
+    assert res.top_categories.top_categories[0].contribution_percentage == Decimal("100.00")
 
 
 def test_combined_api_endpoint(mock_db):
@@ -464,7 +468,7 @@ def test_combined_api_endpoint(mock_db):
         ),
         top_categories=TopCategoriesResponse(
             total_spending=Decimal("50.00"),
-            top_categories=[CategorySpendingDto(category_id=uuid.uuid4(), category_name="Food", category_icon="fastfood", spending=Decimal("50.00"), percentage_change=Decimal("20.00"))]
+            top_categories=[CategorySpendingDto(category_id=uuid.uuid4(), category_name="Food", category_icon="fastfood", spending=Decimal("50.00"), percentage_change=Decimal("20.00"), contribution_percentage=Decimal("100.00"))]
         )
     )
 
@@ -487,6 +491,7 @@ def test_combined_api_endpoint(mock_db):
         assert data["financial_stats"]["highest_value"] == "50.00"
         assert data["budget_status"]["highest_spending"] == "50.00"
         assert data["top_categories"]["top_categories"][0]["category_name"] == "Food"
+        assert data["top_categories"]["top_categories"][0]["contribution_percentage"] == "100.00"
     finally:
         StatisticsService.calculate_combined_stats = original_combined
 
