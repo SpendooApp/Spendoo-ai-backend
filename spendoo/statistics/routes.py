@@ -11,13 +11,13 @@ from spendoo.statistics.models import (
     Granularity,
     CombinedStatsResponse
 )
-from spendoo.statistics.service import StatisticsService
+from spendoo.core.services import ServiceContainer
 
 router = APIRouter(prefix="/statistics", tags=["statistics"])
 
 @router.post("/calculate", response_model=FinancialStatsResponse)
 def calculate_statistics(request: StatsRequest, db: Session = Depends(get_db)):
-    service = StatisticsService(db)
+    service = ServiceContainer.get_statistics_service(db)
     return service.calculate_stats(
         user_id=request.user_id,
         granularity=request.granularity,
@@ -27,7 +27,7 @@ def calculate_statistics(request: StatsRequest, db: Session = Depends(get_db)):
 
 @router.post("/budget-status", response_model=BudgetStatusResponse)
 def get_budget_status(request: StatsRequest, db: Session = Depends(get_db)):
-    service = StatisticsService(db)
+    service = ServiceContainer.get_statistics_service(db)
     return service.calculate_budget_status(
         user_id=request.user_id,
         granularity=request.granularity,
@@ -37,7 +37,7 @@ def get_budget_status(request: StatsRequest, db: Session = Depends(get_db)):
 
 @router.get("/top-categories", response_model=TopCategoriesResponse)
 def get_top_categories(user_id: uuid.UUID, granularity: Granularity, db: Session = Depends(get_db)):
-    service = StatisticsService(db)
+    service = ServiceContainer.get_statistics_service(db)
     return service.get_top_categories(
         user_id=user_id,
         granularity=granularity
@@ -45,7 +45,7 @@ def get_top_categories(user_id: uuid.UUID, granularity: Granularity, db: Session
 
 @router.post("/combined", response_model=CombinedStatsResponse)
 def get_combined_statistics(request: StatsRequest, db: Session = Depends(get_db)):
-    service = StatisticsService(db)
+    service = ServiceContainer.get_statistics_service(db)
     return service.calculate_combined_stats(
         user_id=request.user_id,
         granularity=request.granularity,
