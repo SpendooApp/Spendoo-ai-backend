@@ -27,9 +27,17 @@ def test_ip_restriction_middleware():
         assert resp.status_code == 403
         assert resp.json() == {"detail": "Forbidden: IP 192.168.1.100 not allowed"}
 
-        # Request with an allowed client IP
+        # Request with default allowed client IPs
         resp_allowed = client.get('/api/v1/core/', headers={"x-forwarded-for": "127.0.0.1"})
         assert resp_allowed.status_code == 200
+
+        # Request with Docker subnet allowed IPs
+        resp_subnet1 = client.get('/api/v1/core/', headers={"x-forwarded-for": "172.17.0.2"})
+        assert resp_subnet1.status_code == 200
+
+        # Request with custom/other Docker subnet allowed IPs
+        resp_subnet2 = client.get('/api/v1/core/', headers={"x-forwarded-for": "172.18.0.5"})
+        assert resp_subnet2.status_code == 200
     finally:
         if original_deploy is not None:
             os.environ["SPENDOO_DEPLOY"] = original_deploy
