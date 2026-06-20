@@ -9,14 +9,12 @@ class StatisticsRepository:
         self.db = db
 
     def get_transactions_in_range(self, user_id: uuid.UUID, start_date: datetime, end_date: datetime):
-        from sqlalchemy import or_
         return (
             self.db.query(TransactionORM)
             .filter(
                 TransactionORM.user_id == user_id,
                 TransactionORM.transaction_date >= start_date,
-                TransactionORM.transaction_date < end_date,
-                or_(TransactionORM.amount >= 0, TransactionORM.category_id.isnot(None))
+                TransactionORM.transaction_date < end_date
             )
             .all()
         )
@@ -32,3 +30,14 @@ class StatisticsRepository:
             )
             .all()
         )
+
+    def get_user_categories(self, user_id: uuid.UUID):
+        return (
+            self.db.query(CategoryORM)
+            .filter(
+                CategoryORM.user_id == user_id,
+                CategoryORM.is_deleted == False
+            )
+            .all()
+        )
+

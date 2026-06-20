@@ -26,3 +26,37 @@ class StatsBucketDto(BaseModel):
 class FinancialStatsResponse(BaseModel):
     buckets: List[StatsBucketDto]
     highest_spending_bucket_index: int
+    highest_value: Decimal
+
+class BudgetStatus(str, Enum):
+    WITHIN = "within"
+    RISK = "risk"
+    OVERSPEND = "overspend"
+
+class BudgetStatusBucketDto(BaseModel):
+    spending: Decimal
+    status: BudgetStatus
+    percentage: Decimal
+    start_date: datetime
+
+class BudgetStatusResponse(BaseModel):
+    buckets: List[BudgetStatusBucketDto]
+    highest_spending: Decimal
+
+class CategorySpendingDto(BaseModel):
+    category_id: uuid.UUID
+    category_name: str
+    category_icon: str
+    spending: Decimal
+    percentage_change: Decimal
+
+class TopCategoriesResponse(BaseModel):
+    total_spending: Decimal
+    top_categories: List[CategorySpendingDto]
+
+class CombinedStatsResponse(BaseModel):
+    financial_stats: FinancialStatsResponse
+    budget_status: BudgetStatusResponse
+    top_categories: TopCategoriesResponse
+
+
