@@ -1,5 +1,6 @@
 import pytest
-from spendoo import create_app
+from fastapi.testclient import TestClient
+from app import create_app
 
 
 @pytest.fixture
@@ -9,5 +10,6 @@ def app():
 
 @pytest.fixture
 def client(app):
-    return app.test_client()
+    return TestClient(app)
+
 
