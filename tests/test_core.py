@@ -1,10 +1,11 @@
 def test_index(client):
-    resp = client.get('/')
+    resp = client.get('/api/v1/core/')
     assert resp.status_code == 200
-    assert b'Hello World' in resp.data
+    assert "Hello World" in resp.text
 
 
 def test_core_health(client):
-    resp = client.get('/health')
+    resp = client.get('/api/v1/core/health')
     assert resp.status_code == 200
-    assert resp.get_json() == {'status': 'ok'}
+    assert resp.json() == {'status': 'ok'}
+
