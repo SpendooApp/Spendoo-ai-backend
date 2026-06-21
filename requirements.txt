@@ -10,6 +10,6 @@ google.genai>=1.69.0,<2
 flask>=3.0,<4
 psycopg2-binary>=2.9,<3
 SQLAlchemy>=2.0,<3
-numpy==1.24.3
-pandas==2.0.3
+numpy>=1.26.0
+pandas>=2.2.0
 darts==0.44.1
