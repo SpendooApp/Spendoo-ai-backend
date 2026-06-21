@@ -1,13 +1,12 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from spendoo.core.database import get_db
+from .models import ForecastRequest, ForecastResponse
+from .service import ForecastService
 
-router = APIRouter(prefix="/forecasting", tags=["forecasting"])
+router = APIRouter(prefix="/forecasting", tags=["Forecasting"])
 
-
-@router.get("/")
-def info():
-    return {"module": "forecasting", "status": "ok"}
-
-
-@router.get("/health")
-def health():
-    return {"status": "ok"}
+@router.post("/predict", response_model=ForecastResponse)
+def predict(request: ForecastRequest, db: Session = Depends(get_db)):
+    service = ForecastService(db)
+    return service.forecast(request.user_id, request.horizon, request.lookback)
