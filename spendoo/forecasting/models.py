@@ -10,6 +10,7 @@ class ForecastRequest(BaseModel):
     granularity: Granularity
     start_date: datetime
     end_date: datetime
+    category_id: Optional[uuid.UUID] = None  # if None, forecast all categories combined
 
 class ForecastBucketDto(BaseModel):
     spending: Decimal
@@ -22,4 +23,4 @@ class ForecastResponse(BaseModel):
     buckets: List[ForecastBucketDto]
     highest_spending_bucket_index: int
     highest_value: Decimal
-    message: Optional[str] = None
+    predict: bool = True

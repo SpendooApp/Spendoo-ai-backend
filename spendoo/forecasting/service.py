@@ -7,7 +7,7 @@ from darts.utils.utils import SeasonalityMode
 from sqlalchemy.orm import Session
 from decimal import Decimal
 
-from spendoo.forecasting.validators import validate_forecast_ratio, SparsityError
+from spendoo.forecasting.validators import validate_forecast_ratio, SparsityError, validate_spending_signal
 from spendoo.statistics.service import StatisticsService
 from spendoo.statistics.models import Granularity
 from spendoo.anomaly_detection.service import AnomalyService
@@ -66,7 +66,8 @@ class ForecastService:
             user_id=request.user_id,
             granularity=granularity,
             start_date=request.start_date,
-            end_date=history_end
+            end_date=history_end,
+            category_id=request.category_id
         )
         history_buckets = history_response.buckets
 
@@ -91,7 +92,7 @@ class ForecastService:
                 buckets=result_buckets,
                 highest_spending_bucket_index=int(history_response.highest_spending_bucket_index),
                 highest_value=history_response.highest_value,
-                message=str(e)
+                predict=False
             )
         
         # ── 2. Build history bucket DTOs (predicted=False, same shape as stats response)
@@ -108,15 +109,35 @@ class ForecastService:
 
         # ── 3. Build Series for spending and budget separately
         dates = [b.start_date for b in history_buckets]
-        spending_vals = pd.Series([float(b.spending) for b in history_buckets], index=pd.to_datetime(dates))
-        budget_vals = pd.Series([float(b.budget) for b in history_buckets], index=pd.to_datetime(dates))
+        spending_vals = [float(b.spending) for b in history_buckets]
+        budget_vals   = [float(b.budget)   for b in history_buckets]
+
+        spending_series = pd.Series(spending_vals, index=pd.to_datetime(dates))
+        budget_series   = pd.Series(budget_vals,   index=pd.to_datetime(dates))
+
+        # ── 3.1 Validate signal quality BEFORE attempting to forecast ─────────────
+        try:
+            validate_spending_signal(spending_vals, budget_vals)
+        except SparsityError as e:
+            return ForecastResponse(
+                buckets=[
+                    ForecastBucketDto(
+                        spending=b.spending, income=b.income,
+                        budget=b.budget, start_date=b.start_date, predicted=False
+                    )
+                    for b in history_buckets
+                ],
+                highest_spending_bucket_index=int(history_response.highest_spending_bucket_index),
+                highest_value=history_response.highest_value,
+                predict=False
+            )
 
         # ── 4. Clean spending anomalies (budget is deterministic — no IQR needed)
-        cleaned_spending = self.anomaly.clean_series(spending_vals)
+        cleaned_spending = self.anomaly.clean_series(spending_series)
 
         # ── 5. Forecast spending and budget
         forecast_spending = self._fit_and_forecast(cleaned_spending, horizon, granularity)
-        forecast_budget = self._fit_and_forecast(budget_vals, horizon, granularity)
+        forecast_budget = self._fit_and_forecast(budget_series, horizon, granularity)
 
         # ── 6. Generate future bucket start dates
         future_dates = self._generate_future_dates(dates[-1], granularity, horizon)
@@ -145,7 +166,7 @@ class ForecastService:
             buckets=result_buckets,
             highest_spending_bucket_index=highest_spending_idx,
             highest_value=highest_value,
-            message=None
+            predict=True
         )
     
 
@@ -157,10 +178,19 @@ class ForecastService:
     ) -> np.ndarray:
         seasonality_period = GRANULARITY_SEASONALITY.get(granularity, 7)
 
-        # Theta needs more points than the seasonality period
-        if len(series) <= seasonality_period:
-            seasonality_period = 1
+        n = len(series)
 
+        # Theta requires at least 2 × seasonality_period points
+        # Reduce seasonality_period until the constraint is satisfied
+        while seasonality_period > 1 and n < 2 * seasonality_period:
+            seasonality_period -= 1
+
+        # If still not enough even with seasonality_period=1, fall back to simple trend
+        if n < 2:
+            # Not enough data even for simplest model — return mean as flat forecast
+            mean_val = float(series.mean()) if not series.empty else 0.0
+            return np.clip(np.full(horizon, mean_val), a_min=0, a_max=None)
+        
         darts_series = TimeSeries.from_series(series)
         model = Theta(seasonality_period=seasonality_period, season_mode=SeasonalityMode.ADDITIVE)
         model.fit(darts_series)
@@ -216,62 +246,4 @@ class ForecastService:
 
 
 
-    # def forecast(self, user_id, horizon: int = 10, lookback: int = 20) -> ForecastResponse:
-
-        # ── 1. Pull data ─────────────────────────────────────────────────────
-        daily = self.repo.get_daily_spending(user_id, lookback)
-
-        # ── 2. Validate — reject sparse data before doing anything ───────────
-        try:
-            validate_spending_series(daily)
-        except SparsityError as e:
-            return ForecastResponse(
-                forecast_dates=[],
-                forecast_values=[],
-                horizon_days=horizon,
-                trained_on_days=0,
-                message=str(e)
-            )
-
-        # ── 3. Clean via anomaly detection ───────────────────────────────────
-        anomaly_result = self.anomaly.detect(user_id, days=lookback)
-
-        if anomaly_result.cleaned_values:
-            cleaned = pd.Series(
-                anomaly_result.cleaned_values,
-                index=daily.index
-            )
-        else:
-            cleaned = daily   # fallback: anomaly module returned empty (too sparse)
-
-        # ── 4. Fit Theta ─────────────────────────────────────────────────────
-        try:
-            train_darts = TimeSeries.from_series(cleaned)
-            model = Theta(seasonality_period=7)
-            model.fit(train_darts)
-        except Exception as e:
-            return ForecastResponse(
-                forecast_dates=[],
-                forecast_values=[],
-                horizon_days=horizon,
-                trained_on_days=len(cleaned),
-                message=f"Model training failed: {str(e)}"
-            )
-
-        # ── 5. Predict ───────────────────────────────────────────────────────
-        prediction     = model.predict(horizon)
-        forecast_vals  = prediction.values().flatten().tolist()
-
-        last_date      = daily.index[-1]
-        forecast_dates = [
-            (last_date + timedelta(days=i + 1)).strftime("%Y-%m-%d")
-            for i in range(horizon)
-        ]
-
-        return ForecastResponse(
-            forecast_dates=forecast_dates,
-            forecast_values=forecast_vals,
-            horizon_days=horizon,
-            trained_on_days=len(cleaned),
-            message=None
-        )
+   

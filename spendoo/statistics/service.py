@@ -29,7 +29,8 @@ class StatisticsService:
         user_id: uuid.UUID,
         granularity: Granularity,
         start_date: datetime,
-        end_date: datetime
+        end_date: datetime,
+        category_id: uuid.UUID = None
     ) -> FinancialStatsResponse:
         start_date, end_date = self._normalize_dates(start_date, end_date)
 
@@ -42,8 +43,8 @@ class StatisticsService:
         last_bucket_end = buckets_ranges[-1]["end"]
 
         # 2. Fetch data in single DB calls
-        transactions = self.repo.get_transactions_in_range(user_id, first_bucket_start, last_bucket_end)
-        budgets = self.repo.get_overlapping_budgets(user_id, first_bucket_start, last_bucket_end)
+        transactions = self.repo.get_transactions_in_range(user_id, first_bucket_start, last_bucket_end, category_id)
+        budgets = self.repo.get_overlapping_budgets(user_id, first_bucket_start, last_bucket_end, category_id)
 
         # Group budgets by category
         budgets_by_category: Dict[uuid.UUID, List[BudgetORM]] = defaultdict(list)
