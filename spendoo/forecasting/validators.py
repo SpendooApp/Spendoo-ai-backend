@@ -1,42 +1,23 @@
 import pandas as pd
 
-# Thresholds
-MIN_ACTIVE_DAYS_RATIO = 0.7    # at least 70% of days must have spending
-MIN_TOTAL_SPENDING    = 500.0   # total must be more than 500 EGP (not a ghost account)
-MIN_UNIQUE_DAYS       = 20      # must have spent on at least 20 distinct days
-
 class SparsityError(Exception):
     """Raised when user data is too sparse to forecast reliably."""
     pass
 
-def validate_spending_series(series: pd.Series) -> None:
+def validate_forecast_ratio(history_count: int, horizon: int) -> None:
     """
-    Raises SparsityError with a descriptive message if the series
-    is too sparse or empty to produce a meaningful forecast.
+    Reject if the forecast horizon is disproportionately large relative to history.
+    Rule: you need at least 2x as many history buckets as you want to predict forward.
+    e.g. predicting 5 weeks forward requires at least 10 weeks of history.
     """
-    total_days   = len(series)
-    active_days  = int((series > 0).sum())
-    total_spent  = float(series.sum())
-    active_ratio = active_days / total_days if total_days > 0 else 0
+    if history_count == 0:
+        raise SparsityError("No historical data available to forecast from.")
 
-    if total_days == 0 or total_spent == 0:
+    ratio = history_count / horizon
+    if ratio < 2.0:
         raise SparsityError(
-            "No spending data found for this period."
-        )
-
-    if active_days < MIN_UNIQUE_DAYS:
-        raise SparsityError(
-            f"Only {active_days} days with spending in the last {total_days} days. "
-            f"Need at least {MIN_UNIQUE_DAYS} active days to forecast."
-        )
-
-    if active_ratio < MIN_ACTIVE_DAYS_RATIO:
-        raise SparsityError(
-            f"{active_days}/{total_days} days have spending ({active_ratio:.0%}). "
-            f"Need at least {MIN_ACTIVE_DAYS_RATIO:.0%} active days to forecast reliably."
-        )
-
-    if total_spent < MIN_TOTAL_SPENDING:
-        raise SparsityError(
-            f"Total spending of {total_spent:.2f} EGP is too low to forecast meaningfully."
+            f"Insufficient history: {history_count} buckets of history to predict "
+            f"{horizon} buckets forward (ratio {ratio:.1f}x). "
+            f"Need at least 2x history — either reduce the forecast horizon or "
+            f"provide a longer history window."
         )
