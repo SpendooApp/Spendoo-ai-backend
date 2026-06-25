@@ -1,7 +1,8 @@
 from pydantic import BaseModel
 from typing import List, Optional
 import uuid
-from spendoo.statistics.models import Granularity
+from spendoo.statistics.models import (Granularity, BudgetStatus,
+                                       StatsBucketDto, BudgetStatusBucketDto)
 from datetime import datetime
 from decimal import Decimal
 
@@ -24,3 +25,17 @@ class ForecastResponse(BaseModel):
     highest_spending_bucket_index: int
     highest_value: Decimal
     predict: bool = True
+
+class CombinedForecastBucketDto(BaseModel):
+    spending:          Decimal
+    income:            Decimal = Decimal("0.00")
+    budget:            Decimal
+    start_date:        datetime
+    predicted:         bool
+    predicted_status:  Optional[BudgetStatus] = None  # None for history buckets
+
+class CombinedForecastResponse(BaseModel):
+    buckets:                       List[CombinedForecastBucketDto]
+    highest_spending_bucket_index: int
+    highest_value:                 Decimal
+    predict:                       bool

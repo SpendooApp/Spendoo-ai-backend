@@ -9,9 +9,9 @@ from decimal import Decimal
 
 from spendoo.forecasting.validators import validate_forecast_ratio, SparsityError, validate_spending_signal
 from spendoo.statistics.service import StatisticsService
-from spendoo.statistics.models import Granularity
+from spendoo.statistics.models import Granularity, StatsRequest
 from spendoo.anomaly_detection.service import AnomalyService
-from .models import ForecastRequest, ForecastResponse, ForecastBucketDto
+from .models import ForecastRequest, ForecastResponse, ForecastBucketDto, CombinedForecastResponse, CombinedForecastBucketDto
 
 GRANULARITY_SEASONALITY = {
     Granularity.DAY:   7,
@@ -168,7 +168,150 @@ class ForecastService:
             highest_value=highest_value,
             predict=True
         )
-    
+
+
+    def forecast_buckets_combined(self, request: StatsRequest) -> CombinedForecastResponse:
+        granularity = request.granularity
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        
+        horizon = request.end_date - datetime.now(timezone.utc)
+        horizon = max(1, (horizon.days // GRANULARITY_SEASONALITY[granularity]))
+
+        # ── 1.1 Cut history at last COMPLETED bucket, not at now ─────────────────
+        last_completed_start = self._get_last_completed_bucket_start(now, granularity)
+
+        # End of history = start of current (incomplete) bucket
+        # e.g. for WEEK granularity on June 23: history ends at June 21 (start of current week)
+        # so June 21 week is excluded from history and becomes a predicted bucket
+        if granularity == Granularity.DAY:
+            history_end = last_completed_start + timedelta(days=1)
+        elif granularity == Granularity.WEEK:
+            history_end = last_completed_start + timedelta(weeks=1)
+        elif granularity == Granularity.MONTH:
+            if last_completed_start.month == 12:
+                history_end = last_completed_start.replace(year=last_completed_start.year + 1, month=1, day=1)
+            else:
+                history_end = last_completed_start.replace(month=last_completed_start.month + 1, day=1)
+        elif granularity == Granularity.YEAR:
+            history_end = last_completed_start.replace(year=last_completed_start.year + 1)
+        else:
+            history_end = last_completed_start + timedelta(days=1)
+
+        # ── 1.2. Get history buckets from StatisticsService (same structure as /calculate) 
+        history_response = self.stats_service.calculate_combined_stats(
+            user_id=request.user_id,
+            granularity=granularity,
+            start_date=request.start_date,
+            end_date=history_end,
+        )
+
+        history_buckets = history_response.financial_stats.buckets
+        history_status = history_response.budget_status.buckets
+        history_cats = history_response.top_categories.top_categories
+
+        # ── 1.3. Calculate horizon from now → end_date ─────────────────────────────
+        forecast_end = request.end_date.replace(tzinfo=None)
+        delta   = forecast_end - history_end  # from end of last completed bucket to requested end_date
+        divisor = GRANULARITY_DAYS[granularity]  
+        horizon = max(1, delta.days // divisor)
+
+        # ── 1.4. Validate ratio ────────────────────────────────────────────────────
+        try:
+            validate_forecast_ratio(len(history_buckets), horizon)
+        except SparsityError as e:
+            result_buckets = [
+                CombinedForecastBucketDto(
+                    spending=b.spending, income=b.income,
+                    budget=b.budget, start_date=b.start_date, predicted=False
+                )
+                for b in history_buckets
+            ]
+            return CombinedForecastResponse(
+                buckets=result_buckets,
+                highest_spending_bucket_index=int(history_response.financial_stats.highest_spending_bucket_index),
+                highest_value=history_response.financial_stats.highest_value,
+                predict=False
+            )
+        
+        # ── 2. Build history bucket DTOs (predicted=False, same shape as stats response)
+        result_buckets = [
+            CombinedForecastBucketDto(
+                spending=b.spending,
+                income=b.income,
+                budget=b.budget,
+                start_date=b.start_date,
+                predicted=False,
+                predicted_status=None
+            )
+            for b in history_buckets
+        ]
+
+        # ── 3. Build Series for spending and budget separately
+        dates = [b.start_date for b in history_buckets]
+        spending_vals = [float(b.spending) for b in history_buckets]
+        budget_vals   = [float(b.budget)   for b in history_buckets]
+
+        spending_series = pd.Series(spending_vals, index=pd.to_datetime(dates))
+        budget_series   = pd.Series(budget_vals,   index=pd.to_datetime(dates))
+
+        # ── 3.1 Validate signal quality BEFORE attempting to forecast ─────────────
+        try:
+            validate_spending_signal(spending_vals, budget_vals)
+        except SparsityError as e:
+            return CombinedForecastResponse(
+                buckets=[
+                    CombinedForecastBucketDto(
+                        spending=b.spending, income=b.income,
+                        budget=b.budget, start_date=b.start_date, predicted=False
+                    )
+                    for b in history_buckets
+                ],
+                highest_spending_bucket_index=int(history_response.financial_stats.highest_spending_bucket_index),
+                highest_value=history_response.financial_stats.highest_value,
+                predict=False
+            )
+
+        # ── 4. Clean spending anomalies (budget is deterministic — no IQR needed)
+        cleaned_spending = self.anomaly.clean_series(spending_series)
+
+        # ── 5. Forecast spending and budget
+        forecast_spending = self._fit_and_forecast(cleaned_spending, horizon, granularity)
+        forecast_budget = self._fit_and_forecast(budget_series, horizon, granularity)
+
+        # ── 6. Generate future bucket start dates
+        future_dates = self._generate_future_dates(dates[-1], granularity, horizon)
+
+        # ── 7. Append predicted buckets
+        for val_s, val_b, fd in zip(forecast_spending, forecast_budget, future_dates):
+            _, status = self.stats_service._determine_budget_status(
+            Decimal(str(val_s)), Decimal(str(val_b))
+            )
+            result_buckets.append(CombinedForecastBucketDto(
+                spending=Decimal(str(round(val_s, 2))),
+                income=Decimal("0.00"),
+                budget=Decimal(str(round(val_b, 2))),
+                start_date=fd,
+                predicted=True,
+                predicted_status=status
+            ))
+
+        # ── 8. Recalculate highest_spending_bucket_index and highest_value across all buckets
+        highest_spending_idx = max(
+            range(len(result_buckets)),
+            key=lambda i: result_buckets[i].spending
+        )
+        highest_value = max(
+            max(b.spending, b.income + b.budget)
+            for b in result_buckets
+        )
+
+        return CombinedForecastResponse(
+            buckets=result_buckets,
+            highest_spending_bucket_index=highest_spending_idx,
+            highest_value=highest_value,
+            predict=True
+        )
+ 
 
     def _fit_and_forecast(
         self,
