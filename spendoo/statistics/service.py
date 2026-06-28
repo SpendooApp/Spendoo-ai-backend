@@ -354,7 +354,8 @@ class StatisticsService:
         user_id: uuid.UUID,
         granularity: Granularity,
         start_date: datetime,
-        end_date: datetime
+        end_date: datetime,
+        now: datetime = None
     ) -> CombinedStatsResponse:
         start_date, end_date = self._normalize_dates(start_date, end_date)
 
@@ -372,7 +373,8 @@ class StatisticsService:
 
         # 2. Determine preceding bucket range for category percentage change
         # preceding period = one bucket before the last completed bucket
-        now = datetime.now()
+        if now is None:
+            now = datetime.now()
         last_completed_start  = self._get_last_completed_bucket_start(now, granularity)
         last_completed_end = self._get_next_bucket_start(last_completed_start, granularity)  
         preceding_start = self._get_preceding_start_date(last_completed_start, granularity)
@@ -380,7 +382,8 @@ class StatisticsService:
 
         # 3. Fetch data in single DB calls
         fetch_start = min(preceding_start, first_bucket_start)
-        transactions = self.repo.get_transactions_in_range(user_id, fetch_start, last_bucket_end)
+        fetch_end = max(last_completed_end, last_bucket_end)
+        transactions = self.repo.get_transactions_in_range(user_id, fetch_start, fetch_end)
         budgets = self.repo.get_overlapping_budgets(user_id, first_bucket_start, last_bucket_end)
 
         # Group budgets by category
@@ -391,18 +394,18 @@ class StatisticsService:
         # Sort transactions for single-pass pointer aggregation
         sorted_tx = sorted(transactions, key=lambda x: x.transaction_date)
         tx_idx = 0
-        num_tx = len(sorted_tx)
 
-        # Aggregate spending by category for the preceding period (prior to first bucket)
+        # Calculate category spending specifically for the last completed bucket and the preceding bucket
+        curr_spending_by_cat = defaultdict(Decimal)
         prev_spending_by_cat = defaultdict(Decimal)
-        while tx_idx < num_tx and sorted_tx[tx_idx].transaction_date < first_bucket_start:
-            t = sorted_tx[tx_idx]
+        for t in sorted_tx:
+            dt = t.transaction_date
             amt = Decimal(str(t.amount))
-            if (amt < 0 and t.category_id is not None
-                    and sorted_tx[tx_idx].transaction_date >= preceding_start
-                    and sorted_tx[tx_idx].transaction_date < preceding_end):
-                prev_spending_by_cat[t.category_id] += abs(amt)
-            tx_idx += 1
+            if amt < 0 and t.category_id is not None:
+                if last_completed_start <= dt < last_completed_end:
+                    curr_spending_by_cat[t.category_id] += abs(amt)
+                elif preceding_start <= dt < preceding_end:
+                    prev_spending_by_cat[t.category_id] += abs(amt)
 
         # 4. Process each bucket
         stats_bucket_dtos = []
@@ -413,19 +416,13 @@ class StatisticsService:
         highest_value = Decimal("0.00")
         highest_spending = Decimal("0.00")
 
-        curr_spending_by_cat = defaultdict(Decimal)
-        last_bucket_idx = len(buckets_ranges) - 1
-
         for b_idx, range_info in enumerate(buckets_ranges):
             k_start = range_info["start"]
             k_end = range_info["end"]
 
-            spending, income, tx_idx, bucket_cat_spending = self._aggregate_transactions_for_bucket(
-                sorted_tx, tx_idx, k_start, k_end, track_category_spending=(k_start <= last_completed_start)
+            spending, income, tx_idx, _ = self._aggregate_transactions_for_bucket(
+                sorted_tx, tx_idx, k_start, k_end, track_category_spending=False
             )
-            if k_start <= last_completed_start:
-                for cat_id, amt in bucket_cat_spending.items():
-                    curr_spending_by_cat[cat_id] += amt
 
             total_budget = Decimal("0.00")
             for cat_id, cat_budgets in budgets_by_category.items():
@@ -469,8 +466,6 @@ class StatisticsService:
 
         # 5. Build Top Categories response using DRY helper
         top_categories = self._build_top_categories(user_id, curr_spending_by_cat, prev_spending_by_cat)
-
-        last_bucket_spending = stats_bucket_dtos[-1].spending if stats_bucket_dtos else Decimal("0.00")
 
         return CombinedStatsResponse(
             financial_stats=FinancialStatsResponse(

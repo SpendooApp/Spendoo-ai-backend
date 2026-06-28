@@ -308,11 +308,11 @@ def test_get_top_categories_service(service):
         ]
     )
 
-    # Call with now = 2026-06-20
+    # Call with now = 2026-07-20
     res = service.get_top_categories(
         user_id=user_id,
         granularity=Granularity.MONTH,
-        now=datetime(2026, 6, 20)
+        now=datetime(2026, 7, 20)
     )
 
     assert res.total_spending == Decimal("1300.00")
@@ -414,7 +414,8 @@ def test_calculate_combined_stats_service_correctness(service):
         user_id=user_id,
         granularity=Granularity.DAY,
         start_date=datetime(2026, 6, 19),
-        end_date=datetime(2026, 6, 21)
+        end_date=datetime(2026, 6, 21),
+        now=datetime(2026, 6, 21)
     )
 
     # 1. Financial stats checks
@@ -437,9 +438,9 @@ def test_calculate_combined_stats_service_correctness(service):
     assert len(res.top_categories.top_categories) == 1
     assert res.top_categories.top_categories[0].category_name == "Food"
     assert res.top_categories.top_categories[0].spending == Decimal("150.00")
-    # Previous spending (June 18) = 100.00. Current (June 20) = 150.00.
-    # Percentage change = ((150 - 100) / 100) * 100 = +50%
-    assert res.top_categories.top_categories[0].percentage_change == Decimal("50.00")
+    # Previous spending (June 19) = 50.00. Current (June 20) = 150.00.
+    # Percentage change = ((150 - 50) / 50) * 100 = +200%
+    assert res.top_categories.top_categories[0].percentage_change == Decimal("200.00")
     assert res.top_categories.top_categories[0].contribution_percentage == Decimal("100.00")
 
 
