@@ -9,6 +9,8 @@ class Settings:
     MISTRAL_API_KEY: str = os.getenv("MISTRAL_API_KEY")
 
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY")
+    AZURE_ENDPOINT: str = os.getenv("AZURE_ENDPOINT")
+    AZURE_KEY: str = os.getenv("AZURE_KEY")
     GEMINI_OCR_MODELS = [
     "gemini-3.1-flash-lite-preview",
     "gemini-2.5-flash",

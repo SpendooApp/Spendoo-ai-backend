@@ -4,6 +4,8 @@ from spendoo.core.config import settings
 import base64
 from google import genai
 from google.genai import types
+from azure.ai.formrecognizer import DocumentAnalysisClient
+from azure.core.credentials import AzureKeyCredential
 
 class OCRService:
 
@@ -12,6 +14,14 @@ class OCRService:
         self.geminiClient = genai.Client(api_key=settings.GEMINI_API_KEY)
         self.geminiModels = settings.GEMINI_OCR_MODELS
         self.prompt = settings.OCR_PROMPT
+
+        if settings.AZURE_ENDPOINT and settings.AZURE_KEY:
+            self.azureClient = DocumentAnalysisClient(
+                endpoint=settings.AZURE_ENDPOINT,
+                credential=AzureKeyCredential(settings.AZURE_KEY)
+            )
+        else:
+            self.azureClient = None
 
 
     def parse_json(self, response: str):
@@ -59,9 +69,27 @@ class OCRService:
         return self.parse_json(parse_response.choices[0].message.content)
 
 
+    def try_azure_ocr(self, image_bytes: bytes):
+        if not self.azureClient:
+            raise ValueError("Azure Form Recognizer client is not initialized.")
+        poller = self.azureClient.begin_analyze_document("prebuilt-read", image_bytes)
+        result = poller.result()
+        return result.content
+
+
+
+
     def extract_text(self, image_bytes):
+        # Try Azure Form Recognizer first
+        if self.azureClient:
+            try:
+                items = self.try_azure_ocr(image_bytes)
+                if items:
+                    return items, "azure-form-recognizer"
+            except Exception as e:
+                print(f"Azure OCR failed, falling back: {e}")
         
-        # Try Gemini models first
+        # Try Gemini models next
         for model in self.geminiModels:
             try:
                 items = self.try_gemini_ocr(model, image_bytes)
@@ -75,3 +103,4 @@ class OCRService:
             return items, "mistral-ocr-latest"
         except Exception as e:
             raise RuntimeError("Receipt extraction failed across all models.") from e
+

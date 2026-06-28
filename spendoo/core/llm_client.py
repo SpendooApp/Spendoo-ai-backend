@@ -10,9 +10,11 @@ class LLMClient:
             base_url="https://api.groq.com/openai/v1"
         )
 
-    def generate(self, prompt: str, model: str):
+    def generate(self, prompt: str, model: str, **kwargs):
         response = self.client.responses.create(
             model=model,
-            input=prompt
+            input=prompt,
+            **kwargs
         )
         return response.output_text
+
