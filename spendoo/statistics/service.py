@@ -314,36 +314,19 @@ class StatisticsService:
         if now is None:
             now = datetime.now()
 
-        # Generate current bucket start and end boundaries
-        if granularity == Granularity.DAY:
-            curr_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            curr_end = curr_start + timedelta(days=1)
-        elif granularity == Granularity.WEEK:
-            days_to_subtract = (now.weekday() + 1) % 7
-            curr_start = (now - timedelta(days=days_to_subtract)).replace(hour=0, minute=0, second=0, microsecond=0)
-            curr_end = curr_start + timedelta(weeks=1)
-        elif granularity == Granularity.MONTH:
-            curr_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            if curr_start.month == 12:
-                curr_end = curr_start.replace(year=curr_start.year + 1, month=1, day=1)
-            else:
-                curr_end = curr_start.replace(month=curr_start.month + 1, day=1)
-        elif granularity == Granularity.YEAR:
-            curr_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-            curr_end = curr_start.replace(year=curr_start.year + 1)
-        else:
-            curr_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            curr_end = curr_start + timedelta(days=1)
+        # ── Last completed bucket, not the current in-progress one ───────────────
+        curr_start = self._get_last_completed_bucket_start(now, granularity)
+        curr_end = self._get_next_bucket_start(curr_start, granularity)
 
-        # Preceding bucket start boundaries
+        # ── Preceding bucket = one before the last completed ─────────────────────
         prev_start = self._get_preceding_start_date(curr_start, granularity)
         prev_end = curr_start
 
-        # Fetch transactions for both periods
+        # ── Fetch transactions for both windows ───────────────────────────────────
         tx_curr = self.repo.get_transactions_in_range(user_id, curr_start, curr_end)
         tx_prev = self.repo.get_transactions_in_range(user_id, prev_start, prev_end)
 
-        # Aggregate spending by category for current period
+        # ── Aggregate current period ──────────────────────────────────────────────
         curr_spending_by_cat = defaultdict(Decimal)
         total_spending = Decimal("0.00")
         for t in tx_curr:
@@ -352,21 +335,20 @@ class StatisticsService:
                 curr_spending_by_cat[t.category_id] += abs(amt)
                 total_spending += abs(amt)
 
-        # Aggregate spending by category for previous period
+        # ── Aggregate preceding period ────────────────────────────────────────────
         prev_spending_by_cat = defaultdict(Decimal)
         for t in tx_prev:
             amt = Decimal(str(t.amount))
             if amt < 0 and t.category_id is not None:
                 prev_spending_by_cat[t.category_id] += abs(amt)
 
-        # Build category response using DRY helper
         top_categories = self._build_top_categories(user_id, curr_spending_by_cat, prev_spending_by_cat)
 
         return TopCategoriesResponse(
             total_spending=total_spending.quantize(Decimal("1.00")),
             top_categories=top_categories
         )
-
+    
     def calculate_combined_stats(
         self,
         user_id: uuid.UUID,
@@ -389,10 +371,16 @@ class StatisticsService:
         last_bucket_end = buckets_ranges[-1]["end"]
 
         # 2. Determine preceding bucket range for category percentage change
-        preceding_start = self._get_preceding_start_date(first_bucket_start, granularity)
+        # preceding period = one bucket before the last completed bucket
+        now = datetime.now()
+        last_completed_start  = self._get_last_completed_bucket_start(now, granularity)
+        last_completed_end = self._get_next_bucket_start(last_completed_start, granularity)  
+        preceding_start = self._get_preceding_start_date(last_completed_start, granularity)
+        preceding_end = last_completed_start   # the bucket just before the last completed one
 
         # 3. Fetch data in single DB calls
-        transactions = self.repo.get_transactions_in_range(user_id, preceding_start, last_bucket_end)
+        fetch_start = min(preceding_start, first_bucket_start)
+        transactions = self.repo.get_transactions_in_range(user_id, fetch_start, last_bucket_end)
         budgets = self.repo.get_overlapping_budgets(user_id, first_bucket_start, last_bucket_end)
 
         # Group budgets by category
@@ -410,7 +398,9 @@ class StatisticsService:
         while tx_idx < num_tx and sorted_tx[tx_idx].transaction_date < first_bucket_start:
             t = sorted_tx[tx_idx]
             amt = Decimal(str(t.amount))
-            if amt < 0 and t.category_id is not None:
+            if (amt < 0 and t.category_id is not None
+                    and sorted_tx[tx_idx].transaction_date >= preceding_start
+                    and sorted_tx[tx_idx].transaction_date < preceding_end):
                 prev_spending_by_cat[t.category_id] += abs(amt)
             tx_idx += 1
 
@@ -431,10 +421,11 @@ class StatisticsService:
             k_end = range_info["end"]
 
             spending, income, tx_idx, bucket_cat_spending = self._aggregate_transactions_for_bucket(
-                sorted_tx, tx_idx, k_start, k_end, track_category_spending=(b_idx == last_bucket_idx)
+                sorted_tx, tx_idx, k_start, k_end, track_category_spending=(k_start <= last_completed_start)
             )
-            if b_idx == last_bucket_idx:
-                curr_spending_by_cat = bucket_cat_spending
+            if k_start <= last_completed_start:
+                for cat_id, amt in bucket_cat_spending.items():
+                    curr_spending_by_cat[cat_id] += amt
 
             total_budget = Decimal("0.00")
             for cat_id, cat_budgets in budgets_by_category.items():
@@ -492,7 +483,7 @@ class StatisticsService:
                 highest_spending=highest_spending
             ),
             top_categories=TopCategoriesResponse(
-                total_spending=last_bucket_spending,
+                total_spending=sum(curr_spending_by_cat.values()).quantize(Decimal("1.00")),
                 top_categories=top_categories
             )
         )
@@ -602,5 +593,35 @@ class StatisticsService:
             tx_idx += 1
 
         return spending, income, tx_idx, curr_spending_by_cat
+    
+    def _get_next_bucket_start(self, bucket_start: datetime, granularity: Granularity) -> datetime:
+        """Returns the start of the bucket immediately after the given one."""
+        if granularity == Granularity.DAY:
+            return bucket_start + timedelta(days=1)
+        elif granularity == Granularity.WEEK:
+            return bucket_start + timedelta(weeks=1)
+        elif granularity == Granularity.MONTH:
+            if bucket_start.month == 12:
+                return bucket_start.replace(year=bucket_start.year + 1, month=1, day=1)
+            return bucket_start.replace(month=bucket_start.month + 1, day=1)
+        elif granularity == Granularity.YEAR:
+            return bucket_start.replace(year=bucket_start.year + 1)
+        return bucket_start + timedelta(days=1)
+    
+    def _get_last_completed_bucket_start(self, now: datetime, granularity: Granularity) -> datetime:
+        """Identical to the one in ForecastService — finds the last fully completed bucket."""
+        if granularity == Granularity.DAY:
+            return (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        elif granularity == Granularity.WEEK:
+            days_since_sunday = (now.weekday() + 1) % 7
+            current_week_start = (now - timedelta(days=days_since_sunday)).replace(hour=0, minute=0, second=0, microsecond=0)
+            return current_week_start - timedelta(weeks=1)
+        elif granularity == Granularity.MONTH:
+            if now.month == 1:
+                return now.replace(year=now.year - 1, month=12, day=1, hour=0, minute=0, second=0, microsecond=0)
+            return now.replace(month=now.month - 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif granularity == Granularity.YEAR:
+            return now.replace(year=now.year - 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        return (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
