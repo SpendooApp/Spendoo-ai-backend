@@ -316,7 +316,7 @@ class StatisticsService:
 
         # ── Last completed bucket, not the current in-progress one ───────────────
         curr_start = self._get_last_completed_bucket_start(now, granularity)
-        curr_end = self._get_next_bucket_start(curr_start, granularity)
+        curr_end = now
 
         # ── Preceding bucket = one before the last completed ─────────────────────
         prev_start = self._get_preceding_start_date(curr_start, granularity)
@@ -376,7 +376,7 @@ class StatisticsService:
         if now is None:
             now = datetime.now()
         last_completed_start  = self._get_last_completed_bucket_start(now, granularity)
-        last_completed_end = self._get_next_bucket_start(last_completed_start, granularity)  
+        last_completed_end = min(end_date, now)
         preceding_start = self._get_preceding_start_date(last_completed_start, granularity)
         preceding_end = last_completed_start   # the bucket just before the last completed one
 
