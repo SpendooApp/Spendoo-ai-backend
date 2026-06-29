@@ -478,7 +478,7 @@ class StatisticsService:
                 highest_spending=highest_spending
             ),
             top_categories=TopCategoriesResponse(
-                total_spending=sum(curr_spending_by_cat.values()).quantize(Decimal("1.00")),
+                total_spending=sum(curr_spending_by_cat.values(), Decimal("0.00")).quantize(Decimal("1.00")),
                 top_categories=top_categories
             )
         )
@@ -527,7 +527,7 @@ class StatisticsService:
         categories = self.repo.get_user_categories(user_id)
         cat_map = {c.id: c for c in categories}
 
-        total_spending = sum(curr_spending.values())
+        total_spending = sum(curr_spending.values(), Decimal("0.00"))
 
         cat_dtos = []
         for cat_id, curr_val in curr_spending.items():

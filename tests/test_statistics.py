@@ -553,5 +553,24 @@ def test_budget_status_ignores_income(service):
     assert res.buckets[0].percentage == Decimal("95.00")
 
 
+def test_calculate_combined_stats_empty_transactions(service):
+    user_id = uuid.uuid4()
+    service.repo.get_user_categories.return_value = []
+    service.repo.get_transactions_in_range.return_value = []
+    service.repo.get_overlapping_budgets.return_value = []
+
+    res = service.calculate_combined_stats(
+        user_id=user_id,
+        granularity=Granularity.DAY,
+        start_date=datetime(2026, 6, 19),
+        end_date=datetime(2026, 6, 21),
+        now=datetime(2026, 6, 21)
+    )
+
+    assert res.top_categories.total_spending == Decimal("0.00")
+    assert len(res.top_categories.top_categories) == 0
+
+
+
 
 
