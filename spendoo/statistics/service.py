@@ -102,7 +102,18 @@ class StatisticsService:
         )
 
 
-    def _generate_buckets(self, start: datetime, end: datetime, granularity: Granularity) -> List[Dict[str, datetime]]:
+    def _generate_buckets(
+        self,
+        start: datetime,
+        end: datetime,
+        granularity: Granularity,
+        upper_bound: datetime = None
+    ) -> List[Dict[str, datetime]]:
+        if upper_bound is not None:
+            if upper_bound.tzinfo is not None:
+                upper_bound = upper_bound.replace(tzinfo=None)
+            end = min(end, upper_bound)
+
         # Align start date to bucket boundary
         if granularity == Granularity.DAY:
             first_start = start.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -243,12 +254,17 @@ class StatisticsService:
         user_id: uuid.UUID,
         granularity: Granularity,
         start_date: datetime,
-        end_date: datetime
+        end_date: datetime,
+        now: datetime = None
     ) -> BudgetStatusResponse:
         start_date, end_date = self._normalize_dates(start_date, end_date)
+        if now is None:
+            now = datetime.now()
+        if now.tzinfo is not None:
+            now = now.replace(tzinfo=None)
 
         # 1. Generate Buckets
-        buckets_ranges = self._generate_buckets(start_date, end_date, granularity)
+        buckets_ranges = self._generate_buckets(start_date, end_date, granularity, now)
         if not buckets_ranges:
             return BudgetStatusResponse(buckets=[], highest_spending=Decimal("0.00"))
 
@@ -358,9 +374,14 @@ class StatisticsService:
         now: datetime = None
     ) -> CombinedStatsResponse:
         start_date, end_date = self._normalize_dates(start_date, end_date)
-
         # 1. Generate Buckets
+        if now is None:
+            now = datetime.now()
+        if now.tzinfo is not None:
+            now = now.replace(tzinfo=None)
+
         buckets_ranges = self._generate_buckets(start_date, end_date, granularity)
+
         if not buckets_ranges:
             return CombinedStatsResponse(
                 financial_stats=FinancialStatsResponse(buckets=[], highest_spending_bucket_index=0, highest_value=Decimal("0.00")),
@@ -373,8 +394,6 @@ class StatisticsService:
 
         # 2. Determine preceding bucket range for category percentage change
         # preceding period = one bucket before the last completed bucket
-        if now is None:
-            now = datetime.now()
         last_completed_start  = self._get_last_completed_bucket_start(now, granularity)
         last_completed_end = min(end_date, now)
         preceding_start = self._get_preceding_start_date(last_completed_start, granularity)
@@ -393,7 +412,6 @@ class StatisticsService:
 
         # Sort transactions for single-pass pointer aggregation
         sorted_tx = sorted(transactions, key=lambda x: x.transaction_date)
-        tx_idx = 0
 
         # Calculate category spending specifically for the last completed bucket and the preceding bucket
         curr_spending_by_cat = defaultdict(Decimal)
@@ -410,12 +428,12 @@ class StatisticsService:
         # 4. Process each bucket
         stats_bucket_dtos = []
         status_bucket_dtos = []
-
         highest_spending_idx = 0
         max_spending = Decimal("-1.0")
         highest_value = Decimal("0.00")
         highest_spending = Decimal("0.00")
 
+        tx_idx = 0
         for b_idx, range_info in enumerate(buckets_ranges):
             k_start = range_info["start"]
             k_end = range_info["end"]
@@ -450,19 +468,20 @@ class StatisticsService:
                 highest_value = val
 
             # --- Budget Status Bucket ---
-            percentage, status = self._determine_budget_status(spending, total_budget)
+            if k_start < now:
+                percentage, status = self._determine_budget_status(spending, total_budget)
+                bs_dto = BudgetStatusBucketDto(
+                    spending=spending.quantize(Decimal("1.00")),
+                    status=status,
+                    percentage=percentage.quantize(Decimal("1.00")),
+                    start_date=k_start
+                )
+                status_bucket_dtos.append(bs_dto)
 
-            bs_dto = BudgetStatusBucketDto(
-                spending=spending.quantize(Decimal("1.00")),
-                status=status,
-                percentage=percentage.quantize(Decimal("1.00")),
-                start_date=k_start
-            )
-            status_bucket_dtos.append(bs_dto)
+                # Track highest spending for budget status
+                if bs_dto.spending > highest_spending:
+                    highest_spending = bs_dto.spending
 
-            # Track highest spending for budget status
-            if bs_dto.spending > highest_spending:
-                highest_spending = bs_dto.spending
 
         # 5. Build Top Categories response using DRY helper
         top_categories = self._build_top_categories(user_id, curr_spending_by_cat, prev_spending_by_cat)
