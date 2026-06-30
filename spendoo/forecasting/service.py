@@ -177,45 +177,31 @@ class ForecastService:
         horizon = request.end_date - datetime.now(timezone.utc)
         horizon = max(1, (horizon.days // GRANULARITY_SEASONALITY[granularity]))
 
-        # ── 1.1 Cut history at last COMPLETED bucket, not at now ─────────────────
-        last_completed_start = self._get_last_completed_bucket_start(now, granularity)
+        # ── 1. Cut history at last COMPLETED bucket, not at now ─────────────────
+        last_completed_start = self.stats_service._get_last_completed_bucket_start(now, granularity)
+        history_end = self.stats_service._get_next_bucket_start(last_completed_start, granularity)
+        future_dates = self._generate_future_dates(history_end - timedelta(days=1), granularity, horizon)
 
-        # End of history = start of current (incomplete) bucket
-        # e.g. for WEEK granularity on June 23: history ends at June 21 (start of current week)
-        # so June 21 week is excluded from history and becomes a predicted bucket
-        if granularity == Granularity.DAY:
-            history_end = last_completed_start + timedelta(days=1)
-        elif granularity == Granularity.WEEK:
-            history_end = last_completed_start + timedelta(weeks=1)
-        elif granularity == Granularity.MONTH:
-            if last_completed_start.month == 12:
-                history_end = last_completed_start.replace(year=last_completed_start.year + 1, month=1, day=1)
-            else:
-                history_end = last_completed_start.replace(month=last_completed_start.month + 1, day=1)
-        elif granularity == Granularity.YEAR:
-            history_end = last_completed_start.replace(year=last_completed_start.year + 1)
-        else:
-            history_end = last_completed_start + timedelta(days=1)
-
-        # ── 1.2. Get history buckets from StatisticsService (same structure as /calculate) 
+        # ── 2. Get history buckets from StatisticsService (same structure as /calculate) 
         history_response = self.stats_service.calculate_combined_stats(
             user_id=request.user_id,
             granularity=granularity,
             start_date=request.start_date,
-            end_date=history_end,
+            end_date=request.end_date,
+            now=now
         )
 
         history_buckets = history_response.financial_stats.buckets
         history_status = history_response.budget_status.buckets
         history_cats = history_response.top_categories.top_categories
 
-        # ── 1.3. Calculate horizon from now → end_date ─────────────────────────────
+        # ── 3. Calculate horizon from now → end_date ─────────────────────────────
         forecast_end = request.end_date.replace(tzinfo=None)
-        delta   = forecast_end - history_end  # from end of last completed bucket to requested end_date
+        delta = forecast_end - history_end  # from end of last completed bucket to requested end_date
         divisor = GRANULARITY_DAYS[granularity]  
         horizon = max(1, delta.days // divisor)
 
-        # ── 1.4. Validate ratio ────────────────────────────────────────────────────
+        # ── 4. Validate ratio ────────────────────────────────────────────────────
         try:
             validate_forecast_ratio(len(history_buckets), horizon)
         except SparsityError as e:
@@ -233,7 +219,7 @@ class ForecastService:
                 predict=False
             )
         
-        # ── 2. Build history bucket DTOs (predicted=False, same shape as stats response)
+        # ── 5. Build spending and budget series
         result_buckets = [
             CombinedForecastBucketDto(
                 spending=b.spending,
@@ -241,7 +227,7 @@ class ForecastService:
                 budget=b.budget,
                 start_date=b.start_date,
                 predicted=False,
-                predicted_status=None
+                status=self.stats_service._determine_budget_status(b.spending, b.budget)[1]
             )
             for b in history_buckets
         ]
@@ -249,12 +235,13 @@ class ForecastService:
         # ── 3. Build Series for spending and budget separately
         dates = [b.start_date for b in history_buckets]
         spending_vals = [float(b.spending) for b in history_buckets]
-        budget_vals   = [float(b.budget)   for b in history_buckets]
+        budget_vals = [float(b.budget)   for b in history_buckets]
 
         spending_series = pd.Series(spending_vals, index=pd.to_datetime(dates))
-        budget_series   = pd.Series(budget_vals,   index=pd.to_datetime(dates))
+        budget_series = pd.Series(budget_vals, index=pd.to_datetime(dates))
 
-        # ── 3.1 Validate signal quality BEFORE attempting to forecast ─────────────
+
+        # ── 6 Validate signal 
         try:
             validate_spending_signal(spending_vals, budget_vals)
         except SparsityError as e:
@@ -271,14 +258,12 @@ class ForecastService:
                 predict=False
             )
 
-        # ── 4. Clean spending anomalies (budget is deterministic — no IQR needed)
+        # ── 7. Clean & forecast
         cleaned_spending = self.anomaly.clean_series(spending_series)
 
-        # ── 5. Forecast spending and budget
         forecast_spending = self._fit_and_forecast(cleaned_spending, horizon, granularity)
         forecast_budget = self._fit_and_forecast(budget_series, horizon, granularity)
 
-        # ── 6. Generate future bucket start dates
         future_dates = self._generate_future_dates(dates[-1], granularity, horizon)
 
         # ── 7. Append predicted buckets
@@ -292,7 +277,7 @@ class ForecastService:
                 budget=Decimal(str(round(val_b, 2))),
                 start_date=fd,
                 predicted=True,
-                predicted_status=status
+                status=status
             ))
 
         # ── 8. Recalculate highest_spending_bucket_index and highest_value across all buckets
@@ -368,24 +353,7 @@ class ForecastService:
         return dates
     
 
-    def _get_last_completed_bucket_start(self, now: datetime, granularity: Granularity) -> datetime:
-        """Returns the start of the most recently COMPLETED bucket — not the current one."""
-        if granularity == Granularity.DAY:
-            # yesterday
-            return (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        elif granularity == Granularity.WEEK:
-            # start of last week (week that ended before current week started)
-            days_since_sunday = (now.weekday() + 1) % 7
-            current_week_start = (now - timedelta(days=days_since_sunday)).replace(hour=0, minute=0, second=0, microsecond=0)
-            return current_week_start - timedelta(weeks=1)
-        elif granularity == Granularity.MONTH:
-            # first day of last month
-            if now.month == 1:
-                return now.replace(year=now.year - 1, month=12, day=1, hour=0, minute=0, second=0, microsecond=0)
-            return now.replace(month=now.month - 1, day=1, hour=0, minute=0, second=0, microsecond=0)
-        elif granularity == Granularity.YEAR:
-            return now.replace(year=now.year - 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-        return now
+    
 
 
 

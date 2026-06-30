@@ -32,7 +32,7 @@ class CombinedForecastBucketDto(BaseModel):
     budget:            Decimal
     start_date:        datetime
     predicted:         bool
-    predicted_status:  Optional[BudgetStatus] = None  # None for history buckets
+    status:  Optional[BudgetStatus] = None  # None for history buckets
 
 class CombinedForecastResponse(BaseModel):
     buckets:                       List[CombinedForecastBucketDto]
