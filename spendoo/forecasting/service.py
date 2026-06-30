@@ -11,7 +11,7 @@ from spendoo.forecasting.validators import validate_forecast_ratio, SparsityErro
 from spendoo.statistics.service import StatisticsService
 from spendoo.statistics.models import Granularity, StatsRequest
 from spendoo.anomaly_detection.service import AnomalyService
-from .models import ForecastRequest, ForecastResponse, ForecastBucketDto, CombinedForecastResponse, CombinedForecastBucketDto
+from .models import CombinedForecastResponse, ForecastRequest, ForecastResponse, ForecastBucketDto, FinancialStatsForecastResponse, CombinedForecastBucketDto
 
 GRANULARITY_SEASONALITY = {
     Granularity.DAY:   7,
@@ -226,7 +226,7 @@ class ForecastService:
                 )
                 for b in history_buckets
             ]
-            return CombinedForecastResponse(
+            return FinancialStatsForecastResponse(
                 buckets=result_buckets,
                 highest_spending_bucket_index=int(history_response.financial_stats.highest_spending_bucket_index),
                 highest_value=history_response.financial_stats.highest_value,
@@ -259,18 +259,21 @@ class ForecastService:
             validate_spending_signal(spending_vals, budget_vals)
         except SparsityError as e:
             return CombinedForecastResponse(
-                buckets=[
-                    CombinedForecastBucketDto(
-                        spending=b.spending, income=b.income,
-                        budget=b.budget, start_date=b.start_date, predicted=False
-                    )
-                    for b in history_buckets
-                ],
-                highest_spending_bucket_index=int(history_response.financial_stats.highest_spending_bucket_index),
-                highest_value=history_response.financial_stats.highest_value,
-                predict=False
-            )
-
+                financial_stats_forecast=FinancialStatsForecastResponse(
+                    buckets=[
+                        CombinedForecastBucketDto(
+                            spending=b.spending, income=b.income,
+                            budget=b.budget, start_date=b.start_date, predicted=False
+                        )
+                        for b in history_buckets
+                    ],
+                    highest_spending_bucket_index=int(history_response.financial_stats.highest_spending_bucket_index),
+                    highest_value=history_response.financial_stats.highest_value,
+                    predict=False
+                ),
+                budget_status=history_response.budget_status,
+                top_categories=history_response.top_categories
+                )
         # ── 4. Clean spending anomalies (budget is deterministic — no IQR needed)
         cleaned_spending = self.anomaly.clean_series(spending_series)
 
@@ -306,10 +309,14 @@ class ForecastService:
         )
 
         return CombinedForecastResponse(
-            buckets=result_buckets,
-            highest_spending_bucket_index=highest_spending_idx,
-            highest_value=highest_value,
-            predict=True
+            financial_stats_forecast= FinancialStatsForecastResponse(
+                buckets=result_buckets,
+                highest_spending_bucket_index=highest_spending_idx,
+                highest_value=highest_value,
+                predict=True
+            ),
+            budget_status=history_response.budget_status,
+            top_categories=history_response.top_categories
         )
  
 

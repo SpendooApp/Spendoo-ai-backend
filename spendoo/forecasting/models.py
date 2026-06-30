@@ -1,8 +1,14 @@
 from pydantic import BaseModel
 from typing import List, Optional
 import uuid
-from spendoo.statistics.models import (Granularity, BudgetStatus,
-                                       StatsBucketDto, BudgetStatusBucketDto)
+from spendoo.statistics.models import (
+    BudgetStatusResponse,
+    Granularity,
+    BudgetStatus,
+    StatsBucketDto,
+    BudgetStatusBucketDto,
+    TopCategoriesResponse,
+)
 from datetime import datetime
 from decimal import Decimal
 
@@ -34,8 +40,13 @@ class CombinedForecastBucketDto(BaseModel):
     predicted:         bool
     predicted_status:  Optional[BudgetStatus] = None  # None for history buckets
 
-class CombinedForecastResponse(BaseModel):
+class FinancialStatsForecastResponse(BaseModel):
     buckets:                       List[CombinedForecastBucketDto]
     highest_spending_bucket_index: int
     highest_value:                 Decimal
     predict:                       bool
+
+class CombinedForecastResponse(BaseModel):
+    financial_stats_forecast: FinancialStatsForecastResponse
+    budget_status: BudgetStatusResponse
+    top_categories: TopCategoriesResponse
