@@ -188,8 +188,6 @@ class ForecastService:
         )
 
         history_buckets = history_response.financial_stats.buckets
-        history_status = history_response.budget_status.buckets
-        history_cats = history_response.top_categories.top_categories
 
         # ── 3. Calculate horizon from now → end_date ─────────────────────────────
         forecast_end = request.end_date.replace(tzinfo=None)
@@ -228,7 +226,7 @@ class ForecastService:
             for b in history_buckets
         ]
 
-        # ── 3. Build Series for spending and budget separately
+        # ── 6. Build Series for spending and budget separately
         dates = [b.start_date for b in history_buckets]
         spending_vals = [float(b.spending) for b in history_buckets]
         budget_vals = [float(b.budget)   for b in history_buckets]
@@ -237,7 +235,7 @@ class ForecastService:
         budget_series = pd.Series(budget_vals, index=pd.to_datetime(dates))
 
 
-        # ── 6 Validate signal 
+        # ── 7. Validate signal 
         try:
             validate_spending_signal(spending_vals, budget_vals)
         except SparsityError as e:
@@ -257,7 +255,7 @@ class ForecastService:
                 budget_status=history_response.budget_status,
                 top_categories=history_response.top_categories
                 )
-        # ── 4. Clean spending anomalies (budget is deterministic — no IQR needed)
+        # ── 8. Clean spending anomalies (budget is deterministic — no IQR needed)
         cleaned_spending = self.anomaly.clean_series(spending_series)
 
         forecast_spending = self._fit_and_forecast(cleaned_spending, horizon, granularity)
@@ -265,7 +263,7 @@ class ForecastService:
 
         future_dates = self._generate_future_dates(dates[-1], granularity, horizon)
 
-        # ── 7. Append predicted buckets
+        # ── 9. Append predicted buckets
         for val_s, val_b, fd in zip(forecast_spending, forecast_budget, future_dates):
             _, status = self.stats_service._determine_budget_status(
             Decimal(str(val_s)), Decimal(str(val_b))
@@ -279,7 +277,7 @@ class ForecastService:
                 status=status
             ))
 
-        # ── 8. Recalculate highest_spending_bucket_index and highest_value across all buckets
+        # ── 10. Recalculate highest_value across all buckets
         highest_value = max(
             max(b.spending, b.income + b.budget)
             for b in result_buckets
