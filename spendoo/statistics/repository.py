@@ -8,19 +8,23 @@ class StatisticsRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_transactions_in_range(self, user_id: uuid.UUID, start_date: datetime, end_date: datetime):
-        return (
+    def get_transactions_in_range(self, user_id: uuid.UUID, start_date: datetime, end_date: datetime, category_id: uuid.UUID = None):
+        query = (
             self.db.query(TransactionORM)
             .filter(
                 TransactionORM.user_id == user_id,
                 TransactionORM.transaction_date >= start_date,
                 TransactionORM.transaction_date < end_date
             )
-            .all()
         )
 
-    def get_overlapping_budgets(self, user_id: uuid.UUID, start_date: datetime, end_date: datetime):
-        return (
+        if category_id is not None:
+            query = query.filter(TransactionORM.category_id == category_id)
+
+        return query.all()
+
+    def get_overlapping_budgets(self, user_id: uuid.UUID, start_date: datetime, end_date: datetime, category_id: uuid.UUID = None):
+        query = (
             self.db.query(BudgetORM)
             .join(CategoryORM, BudgetORM.category_id == CategoryORM.id)
             .filter(
@@ -28,8 +32,12 @@ class StatisticsRepository:
                 BudgetORM.start_date < end_date,
                 BudgetORM.end_date > start_date
             )
-            .all()
         )
+
+        if category_id is not None:
+            query = query.filter(BudgetORM.category_id == category_id)
+
+        return query.all()
 
     def get_user_categories(self, user_id: uuid.UUID):
         return (

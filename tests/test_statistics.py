@@ -308,11 +308,11 @@ def test_get_top_categories_service(service):
         ]
     )
 
-    # Call with now = 2026-06-20
+    # Call with now = 2026-07-20
     res = service.get_top_categories(
         user_id=user_id,
         granularity=Granularity.MONTH,
-        now=datetime(2026, 6, 20)
+        now=datetime(2026, 7, 20)
     )
 
     assert res.total_spending == Decimal("1300.00")
@@ -414,7 +414,8 @@ def test_calculate_combined_stats_service_correctness(service):
         user_id=user_id,
         granularity=Granularity.DAY,
         start_date=datetime(2026, 6, 19),
-        end_date=datetime(2026, 6, 21)
+        end_date=datetime(2026, 6, 21),
+        now=datetime(2026, 6, 21)
     )
 
     # 1. Financial stats checks
@@ -437,9 +438,9 @@ def test_calculate_combined_stats_service_correctness(service):
     assert len(res.top_categories.top_categories) == 1
     assert res.top_categories.top_categories[0].category_name == "Food"
     assert res.top_categories.top_categories[0].spending == Decimal("150.00")
-    # Previous spending (June 18) = 100.00. Current (June 20) = 150.00.
-    # Percentage change = ((150 - 100) / 100) * 100 = +50%
-    assert res.top_categories.top_categories[0].percentage_change == Decimal("50.00")
+    # Previous spending (June 19) = 50.00. Current (June 20) = 150.00.
+    # Percentage change = ((150 - 50) / 50) * 100 = +200%
+    assert res.top_categories.top_categories[0].percentage_change == Decimal("200.00")
     assert res.top_categories.top_categories[0].contribution_percentage == Decimal("100.00")
 
 
@@ -550,6 +551,78 @@ def test_budget_status_ignores_income(service):
     assert len(res.buckets) == 1
     assert res.buckets[0].status == "risk"
     assert res.buckets[0].percentage == Decimal("95.00")
+
+
+def test_calculate_combined_stats_empty_transactions(service):
+    user_id = uuid.uuid4()
+    service.repo.get_user_categories.return_value = []
+    service.repo.get_transactions_in_range.return_value = []
+    service.repo.get_overlapping_budgets.return_value = []
+
+    res = service.calculate_combined_stats(
+        user_id=user_id,
+        granularity=Granularity.DAY,
+        start_date=datetime(2026, 6, 19),
+        end_date=datetime(2026, 6, 21),
+        now=datetime(2026, 6, 21)
+    )
+
+    assert res.top_categories.total_spending == Decimal("0.00")
+    assert len(res.top_categories.top_categories) == 0
+
+
+def test_calculate_budget_status_now_limitation(service):
+    user_id = uuid.uuid4()
+    cat_id = uuid.uuid4()
+    
+    service.repo.get_transactions_in_range.return_value = [
+        TransactionORM(amount=Decimal("-30.00"), transaction_date=datetime(2026, 6, 19, 10, 0), user_id=user_id, category_id=cat_id),
+    ]
+    service.repo.get_overlapping_budgets.return_value = [
+        BudgetORM(category_id=cat_id, amount=Decimal("100.00"), period=1, start_date=datetime(2026, 6, 19), end_date=datetime(2026, 6, 22), is_active=True)
+    ]
+
+    res = service.calculate_budget_status(
+        user_id=user_id,
+        granularity=Granularity.DAY,
+        start_date=datetime(2026, 6, 19),
+        end_date=datetime(2026, 6, 22),
+        now=datetime(2026, 6, 20)  # min(end_date, now) = June 20
+    )
+
+    assert len(res.buckets) == 1
+    assert res.buckets[0].start_date == datetime(2026, 6, 19)
+    assert res.buckets[0].spending == Decimal("30.00")
+
+
+def test_calculate_combined_stats_now_limitation_budget_status(service):
+    from spendoo.categorization.models import CategoryORM
+    user_id = uuid.uuid4()
+    cat_id = uuid.uuid4()
+
+    service.repo.get_user_categories.return_value = [
+        CategoryORM(id=cat_id, category_name="Food", category_icon="fastfood", user_id=user_id)
+    ]
+    service.repo.get_transactions_in_range.return_value = [
+        TransactionORM(amount=Decimal("-30.00"), transaction_date=datetime(2026, 6, 19, 10, 0), user_id=user_id, category_id=cat_id),
+    ]
+    service.repo.get_overlapping_budgets.return_value = [
+        BudgetORM(category_id=cat_id, amount=Decimal("100.00"), period=1, start_date=datetime(2026, 6, 19), end_date=datetime(2026, 6, 22), is_active=True)
+    ]
+
+    res = service.calculate_combined_stats(
+        user_id=user_id,
+        granularity=Granularity.DAY,
+        start_date=datetime(2026, 6, 19),
+        end_date=datetime(2026, 6, 22),
+        now=datetime(2026, 6, 20)  # min(end_date, now) = June 20
+    )
+
+    assert len(res.financial_stats.buckets) == 3
+    assert len(res.budget_status.buckets) == 1
+    assert res.budget_status.buckets[0].start_date == datetime(2026, 6, 19)
+
+
 
 
 

@@ -61,3 +61,26 @@ class AnomalyService:
             upper_bound=0.0,
             message=reason,   
         )
+    
+    def clean_series(self, series: pd.Series) -> pd.Series:
+        """
+        NEW: Pure IQR cleaning on an already-prepared Series.
+        Used by ForecastService on bucketed (day/week/month/year) data,
+        not just raw daily transactions.
+        """
+        if series.empty or len(series) < 4:
+            return series  # not enough data for quartiles to be meaningful
+
+        Q1 = series.quantile(0.25)
+        Q3 = series.quantile(0.75)
+        IQR = Q3 - Q1
+
+        lower_bound = max(0.0, Q1 - 1.5 * IQR)
+        upper_bound = Q3 + 1.5 * IQR
+
+        is_anomaly = (series < lower_bound) | (series > upper_bound)
+        rolling_median = series.rolling(5, min_periods=1).median()
+
+        cleaned = series.copy()
+        cleaned[is_anomaly] = rolling_median[is_anomaly]
+        return cleaned
