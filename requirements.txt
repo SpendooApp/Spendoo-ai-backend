@@ -13,3 +13,5 @@ SQLAlchemy>=2.0,<3
 numpy>=1.26.0
 pandas>=2.2.0
 darts==0.44.1
+azure-ai-formrecognizer==3.3.3
+azure-ai-documentintelligence==1.0.2

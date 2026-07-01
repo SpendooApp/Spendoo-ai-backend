@@ -24,7 +24,7 @@ jobs:
       - name: Test Docker image
         run: |
           # Start container in background
-          docker run -d --name spendoo-test -e "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" -e "MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }}" -e "SPENDOO_DEPLOY=${{ secrets.SPENDOO_DEPLOY }}" -e "SPENDOO_ALLOWED_IP=${{ secrets.SPENDOO_ALLOWED_IP }}" -e "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" -e "DATABASE_URL=${{ secrets.DATABASE_URL }}" -p 8000:8000 spendoo-ai-backend
+          docker run -d --name spendoo-test -e "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" -e "MISTRAL_API_KEY=${{ secrets.MISTRAL_API_KEY }}" -e "SPENDOO_DEPLOY=${{ secrets.SPENDOO_DEPLOY }}" -e "SPENDOO_ALLOWED_IP=${{ secrets.SPENDOO_ALLOWED_IP }}" -e "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" -e "DATABASE_URL=${{ secrets.DATABASE_URL }}" -e "AZURE_ENDPOINT=${{ secrets.AZURE_ENDPOINT }}" -e "AZURE_KEY=${{ secrets.AZURE_KEY }}" -p 8000:8000 spendoo-ai-backend
           # Wait for FastAPI to start
           sleep 10
           # Check health endpoint
