@@ -11,8 +11,8 @@ def test_azure_ocr_called_first():
         mock_settings.MISTRAL_API_KEY = "mistral-mock"
         mock_settings.GEMINI_API_KEY = "gemini-mock"
 
-        # Mock DocumentAnalysisClient constructor
-        with patch("spendoo.ocr.service.DocumentAnalysisClient") as mock_client_class:
+        # Mock DocumentIntelligenceClient constructor
+        with patch("spendoo.ocr.service.DocumentIntelligenceClient") as mock_client_class:
             mock_azure_client = MagicMock()
             mock_client_class.return_value = mock_azure_client
 
@@ -31,12 +31,14 @@ def test_azure_ocr_called_first():
             # Mock fallback methods to ensure they are NOT called
             service.try_gemini_ocr = MagicMock()
             service.try_mistral = MagicMock()
-
-            # Execute extract_text
-            items, model = service.extract_text(b"mockimagebytes")
+            
+            # Patch format_response to just return mock content
+            with patch("spendoo.ocr.service.format_response", return_value="Merchant: Mock Store\nTotal: 100.50\nDate: 2026-06-28\nItem A: 10.50"):
+                # Execute extract_text
+                items, model = service.extract_text(b"mockimagebytes")
 
             # Assert Azure OCR was called and returned the expected structure
-            mock_azure_client.begin_analyze_document.assert_called_once_with("prebuilt-read", b"mockimagebytes")
+            mock_azure_client.begin_analyze_document.assert_called_once_with("prebuilt-receipt", b"mockimagebytes")
             assert model == "azure-form-recognizer"
             assert items == "Merchant: Mock Store\nTotal: 100.50\nDate: 2026-06-28\nItem A: 10.50"
 
