@@ -4,8 +4,9 @@ from spendoo.core.config import settings
 import base64
 from google import genai
 from google.genai import types
-from azure.ai.formrecognizer import DocumentAnalysisClient
+from azure.ai.documentintelligence import DocumentIntelligenceClient
 from azure.core.credentials import AzureKeyCredential
+from spendoo.ocr.utils.get_field_value import format_response
 
 class OCRService:
 
@@ -16,7 +17,7 @@ class OCRService:
         self.prompt = settings.OCR_PROMPT
 
         if settings.AZURE_ENDPOINT and settings.AZURE_KEY:
-            self.azureClient = DocumentAnalysisClient(
+            self.azureClient = DocumentIntelligenceClient(
                 endpoint=settings.AZURE_ENDPOINT,
                 credential=AzureKeyCredential(settings.AZURE_KEY)
             )
@@ -72,9 +73,16 @@ class OCRService:
     def try_azure_ocr(self, image_bytes: bytes):
         if not self.azureClient:
             raise ValueError("Azure Form Recognizer client is not initialized.")
-        poller = self.azureClient.begin_analyze_document("prebuilt-read", image_bytes)
+        
+        # 2. Call the poller with the correct arguments
+        poller = self.azureClient.begin_analyze_document(
+            "prebuilt-receipt",
+            image_bytes
+        )
         result = poller.result()
-        return result.content
+        filtered_response = format_response(result)
+
+        return filtered_response
 
 
 
