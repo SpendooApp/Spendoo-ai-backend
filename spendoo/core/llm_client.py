@@ -66,11 +66,12 @@ class LLMClient:
         response = self.groq_client.chat.completions.create(**kwargs)
         return response.choices[0].message
 
-    def generate(self, prompt: str, model: str):
+    def generate(self, prompt: str, model: str, **kwargs):
         messages = [{"role": "user", "content": prompt}]
-        kwargs = {"messages": messages}
-        
-        message = self._execute_with_fallback(kwargs, model)
+        merged_kwargs = {"messages": messages, **kwargs}
+        if "max_output_tokens" in merged_kwargs:
+            merged_kwargs["max_tokens"] = merged_kwargs.pop("max_output_tokens")
+        message = self._execute_with_fallback(merged_kwargs, model)
         return message.content
 
     def chat_with_tools(self, messages: list, tools: list = None, model: str = "gpt-4o-mini", json_mode: bool = False):
