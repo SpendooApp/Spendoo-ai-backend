@@ -1,8 +1,13 @@
-# Chatbot models
-# No database configured; placeholder dataclasses could go here.
+from pydantic import BaseModel
+from typing import Optional
+import uuid
 
+class ChatRequest(BaseModel):
+    userId: uuid.UUID
+    message: str
+    chatSummary: Optional[str] = ""
 
-class ChatMessage:
-    def __init__(self, text):
-        self.text = text
+class ChatResponse(BaseModel):
+    response: str
+    chatSummary: Optional[str] = ""
 
