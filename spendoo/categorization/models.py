@@ -15,6 +15,7 @@ class CategoryORM(Base):
     is_deleted = Column(Boolean, default=False)
     left_over_options = Column(String, nullable=True)
     user_id = Column(UUID(as_uuid=True), nullable=False)
+    priority = Column(Integer, nullable=False, default=1)
 
 class CategorySchema(BaseModel):
     id: str

@@ -11,7 +11,7 @@ class GetTopCategoriesTool(BaseTool):
             "type": "function",
             "function": {
                 "name": "get_top_categories",
-                "description": "Fetch the user's top spending categories for a given granularity.",
+                "description": "Fetch the user's top spending categories aggregated by a specific time period/granularity (e.g., this day, week, month, or year). Use this for temporal or periodic spending analysis.",
                 "parameters": {
                     "type": "object",
                     "properties": {
