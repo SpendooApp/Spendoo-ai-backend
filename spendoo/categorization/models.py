@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import Column, Boolean, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
@@ -15,6 +15,7 @@ class CategoryORM(Base):
     is_deleted = Column(Boolean, default=False)
     left_over_options = Column(String, nullable=True)
     user_id = Column(UUID(as_uuid=True), nullable=False)
+    priority = Column(Integer, nullable=False, default=1)
 
 class CategorySchema(BaseModel):
     id: str
@@ -24,8 +25,7 @@ class CategorySchema(BaseModel):
     left_over_options: str | None
     user_id: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CategorizationRequest(BaseModel):
     text: str
