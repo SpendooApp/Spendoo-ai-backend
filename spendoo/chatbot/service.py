@@ -63,7 +63,6 @@ class ChatbotService:
                     "tool_call_id": tool_call.id,
                     "content": str(result_data)
                 })
-                print(f"Executed tool '{function_name}' with args {args}. Result: {result_data}")
 
         # ── Final synthesis: Gemini → gpt-4o-mini → gpt-oss-120b ─────────────────
         raw_content = self.llm_client.synthesize(messages)

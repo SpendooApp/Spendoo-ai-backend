@@ -157,7 +157,7 @@ class LLMClient:
         try:
             return self._call_gemini_synthesis(messages)
         except Exception:
-            print(f"Google Gemini 3.5 Flash completely failed: Progressing cascade to GPT-4o Mini.")
+            pass
 
         # Step 2: Try gpt-4o-mini on GitHub
         try:
