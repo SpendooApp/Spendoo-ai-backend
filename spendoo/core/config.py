@@ -6,7 +6,7 @@ load_dotenv()
 class Settings:
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY")
     
-    _github_tokens_str = os.getenv("GITHUB_TOKENS", "")
+    _github_tokens_str = os.getenv("GITHUB_TOKENS")
     GITHUB_TOKENS: list[str] = [t.strip() for t in _github_tokens_str.split(",") if t.strip()]
 
     MISTRAL_API_KEY: str = os.getenv("MISTRAL_API_KEY")
