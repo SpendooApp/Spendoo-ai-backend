@@ -15,7 +15,7 @@ class ChatbotService:
         # Build the dynamic tools registry
         self.tool_instances = {tool.schema["function"]["name"]: tool for tool in AVAILABLE_TOOLS}
         self.tool_schemas = [tool.schema for tool in AVAILABLE_TOOLS]
-
+        
     def process_chat(self, request: ChatRequest) -> ChatResponse:
         system_prompt = (
             "You are a helpful financial assistant for Spendoo. "
@@ -27,32 +27,31 @@ class ChatbotService:
             "Do not use markdown formatting inside the \"response\" text. Provide plain text only."
         )
 
-        messages = [
-            {"role": "system", "content": system_prompt}
-        ]
+        messages = [{"role": "system", "content": system_prompt}]
 
         if request.chatSummary:
             messages.append({"role": "system", "content": f"Previous conversation summary: {request.chatSummary}"})
 
         messages.append({"role": "user", "content": request.message})
 
-        # First call to LLM with dynamically loaded tool schemas and JSON mode enabled
-        llm_response = self.llm_client.chat_with_tools(messages=messages, tools=self.tool_schemas, json_mode=True)
+        # ── First call: tool selection ────────────────────────────────────────────
+        llm_response = self.llm_client.chat_with_tools(
+            messages=messages,
+            tools=self.tool_schemas,
+            json_mode=True
+        )
 
+        # ── Execute tools if requested ────────────────────────────────────────────
         if getattr(llm_response, "tool_calls", None):
-            # The client needs the tool calls appended to messages before we append tool responses
             messages.append(llm_response)
-            
+
             for tool_call in llm_response.tool_calls:
                 function_name = tool_call.function.name
                 args = json.loads(tool_call.function.arguments)
-                
-                result_data = None
                 tool = self.tool_instances.get(function_name)
-                
+
                 if tool:
                     try:
-                        # Dynamically execute the tool
                         result_data = tool.execute(self.db, request.userId, **args)
                     except Exception as e:
                         result_data = f"Error executing tool: {str(e)}"
@@ -65,13 +64,10 @@ class ChatbotService:
                     "content": str(result_data)
                 })
 
-            # Second call to LLM to synthesize final response in JSON mode
-            final_response = self.llm_client.chat_with_tools(messages=messages, json_mode=True)
-            raw_content = final_response.content
-        else:
-            raw_content = llm_response.content
+        # ── Final synthesis: Gemini → gpt-4o-mini → gpt-oss-120b ─────────────────
+        raw_content = self.llm_client.synthesize(messages)
 
-        # Parse the JSON response
+        # ── Parse JSON response ───────────────────────────────────────────────────
         try:
             data = json.loads(raw_content)
             assistant_response = data.get("response", "")
