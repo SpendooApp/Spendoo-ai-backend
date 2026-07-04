@@ -173,7 +173,6 @@ def get_scheduled_payments_summary(db: Session, user_id: uuid.UUID):
             ScheduledPaymentORM.user_id == user_id,
             ScheduledPaymentORM.next_due_date > now,
         )
-        .order_by(ScheduledPaymentORM.next_due_date.desc())
         .scalar()
     )
 

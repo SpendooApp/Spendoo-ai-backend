@@ -19,4 +19,3 @@ class UserAchievementORM(Base):
         ForeignKey("saving_goals.achievements.id"),
         nullable=False,
     )
-    unlocked_at = Column("unlocked_at", DateTime, nullable=False)
