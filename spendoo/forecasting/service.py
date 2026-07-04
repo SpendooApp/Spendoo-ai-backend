@@ -36,13 +36,15 @@ class ForecastService:
 
     def forecast_buckets(self, request: ForecastRequest) -> ForecastResponse:
         granularity = request.granularity
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
-        
-        horizon = request.end_date - datetime.now(timezone.utc)
-        horizon = max(1, (horizon.days // GRANULARITY_SEASONALITY[granularity]))
+        now        = datetime.now(timezone.utc).replace(tzinfo=None)
+        end_date   = request.end_date.replace(tzinfo=None)   if request.end_date.tzinfo   else request.end_date
+        start_date = request.start_date.replace(tzinfo=None) if request.start_date.tzinfo else request.start_date
+
+        # horizon = request.end_date - now
+        # horizon = max(1, (horizon.days // GRANULARITY_SEASONALITY[granularity]))
 
         # ── 1.1 Cut history at last COMPLETED bucket, not at now ─────────────────
-        last_completed_start = self._get_last_completed_bucket_start(now, granularity)
+        last_completed_start = self.stats_service._get_last_completed_bucket_start(now, granularity)
 
         # End of history = start of current (incomplete) bucket
         # e.g. for WEEK granularity on June 23: history ends at June 21 (start of current week)
@@ -62,18 +64,21 @@ class ForecastService:
             history_end = last_completed_start + timedelta(days=1)
 
         # ── 1.2. Get history buckets from StatisticsService (same structure as /calculate) 
+        MIN_HISTORY_BUCKETS = 10
+        fallback_start = self._subtract_buckets(last_completed_start, granularity, MIN_HISTORY_BUCKETS)
+        effective_start = min(start_date, fallback_start)   # take whichever is earlier
+
         history_response = self.stats_service.calculate_stats(
             user_id=request.user_id,
             granularity=granularity,
-            start_date=request.start_date,
+            start_date=effective_start,    # ← not start_date directly
             end_date=history_end,
             category_id=request.category_id
         )
         history_buckets = history_response.buckets
 
         # ── 1.3. Calculate horizon from now → end_date ─────────────────────────────
-        forecast_end = request.end_date.replace(tzinfo=None)
-        delta   = forecast_end - history_end  # from end of last completed bucket to requested end_date
+        delta   = end_date - history_end  # from end of last completed bucket to requested end_date
         divisor = GRANULARITY_DAYS[granularity]  
         horizon = max(1, delta.days // divisor)
 
@@ -348,6 +353,22 @@ class ForecastService:
                 curr = curr.replace(year=curr.year + 1)
             dates.append(curr)
         return dates
+    
+    def _subtract_buckets(self, from_date: datetime, granularity: Granularity, n: int) -> datetime:
+        if granularity == Granularity.DAY:
+            return from_date - timedelta(days=n)
+        elif granularity == Granularity.WEEK:
+            return from_date - timedelta(weeks=n)
+        elif granularity == Granularity.MONTH:
+            month = from_date.month - n
+            year  = from_date.year
+            while month <= 0:
+                month += 12
+                year  -= 1
+            return from_date.replace(year=year, month=month, day=1)
+        elif granularity == Granularity.YEAR:
+            return from_date.replace(year=from_date.year - n)
+        return from_date - timedelta(days=n)
     
 
     

@@ -17,7 +17,7 @@ class CategorizationService:
     def __init__(self, db: Session):
         self.llm = LLMClient()
         self.repo = CategorizationRepository(db)
-        self.model_name = "openai/gpt-oss-120b"
+        self.model_name = "gpt-4o-mini"
 
     def extract(self, text: str, user_id: uuid.UUID):
 

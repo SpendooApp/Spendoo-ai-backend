@@ -37,7 +37,7 @@ class StatisticsService:
         # 1. Generate Buckets
         buckets_ranges = self._generate_buckets(start_date, end_date, granularity)
         if not buckets_ranges:
-            return FinancialStatsResponse(buckets=[], highest_spending_bucket_index=0)
+            return FinancialStatsResponse(buckets=[], highest_spending_bucket_index=0, highest_value=Decimal("0.00"))
 
         first_bucket_start = buckets_ranges[0]["start"]
         last_bucket_end = buckets_ranges[-1]["end"]
