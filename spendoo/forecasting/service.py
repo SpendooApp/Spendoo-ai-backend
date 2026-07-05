@@ -95,10 +95,10 @@ class ForecastService:
         # ── 3. Build Series for spending and budget separately
         dates = [b.start_date for b in history_buckets]
         spending_vals = [float(b.spending) for b in history_buckets]
-        budget_vals   = [float(b.budget)   for b in history_buckets]
+        budget_vals = [float(b.budget)   for b in history_buckets]
 
         spending_series = pd.Series(spending_vals, index=pd.to_datetime(dates))
-        budget_series   = pd.Series(budget_vals,   index=pd.to_datetime(dates))
+        budget_series = pd.Series(budget_vals,   index=pd.to_datetime(dates))
 
         # ── 3.1 Validate signal quality BEFORE attempting to forecast ─────────────
         try:
@@ -157,13 +157,10 @@ class ForecastService:
         end_date = request.end_date.replace(tzinfo=None) if request.end_date.tzinfo else request.end_date
         start_date = request.start_date.replace(tzinfo=None) if request.start_date.tzinfo else request.start_date
         
-        horizon = request.end_date - datetime.now(timezone.utc)
-        horizon = max(1, (horizon.days // GRANULARITY_SEASONALITY[granularity]))
-
         # ── 1. Cut history at last COMPLETED bucket, not at now ─────────────────
         last_completed_start = self.stats_service._get_last_completed_bucket_start(now, granularity)
         history_end = self.stats_service._get_next_bucket_start(last_completed_start, granularity)
-        future_dates = self._generate_future_dates(history_end, granularity, horizon)
+        
         
         # ── 2. Get history buckets from StatisticsService (same structure as /calculate) 
         history_response = self.stats_service.calculate_combined_stats(
@@ -211,7 +208,6 @@ class ForecastService:
             )
             for b in history_buckets
         ]
-
         # ── 6. Build Series for spending and budget separately
         dates = [b.start_date for b in history_buckets]
         spending_vals = [float(b.spending) for b in history_buckets]
@@ -247,7 +243,7 @@ class ForecastService:
         forecast_spending = self._fit_and_forecast(cleaned_spending, horizon, granularity)
         forecast_budget = self._fit_and_forecast(budget_series, horizon, granularity)
 
-        future_dates = self._generate_future_dates(dates[-1], granularity, horizon)
+        future_dates = self._generate_future_dates(history_end, granularity, horizon)
 
         # ── 9. Append predicted buckets
         for val_s, val_b, fd in zip(forecast_spending, forecast_budget, future_dates):
