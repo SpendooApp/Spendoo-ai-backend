@@ -15,6 +15,6 @@ class SavingGoalORM(Base):
     user_id = Column("user_id", UUID(as_uuid=True), nullable=False)
     goal_name = Column("goal_name", String, nullable=False)
     priority = Column(Integer, nullable=False)
-    deadline = Column(DateTime, nullable=False)
+    deadline = Column(DateTime(timezone=True), nullable=False)
     target_amount = Column("target_amount", Numeric, nullable=False)
     is_completed = Column("is_completed", Boolean, nullable=False)

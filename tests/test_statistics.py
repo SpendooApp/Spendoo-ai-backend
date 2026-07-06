@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from decimal import Decimal
 from fastapi.testclient import TestClient
@@ -21,41 +21,41 @@ def service(mock_db):
     return svc
 
 def test_generate_buckets_daily(service):
-    start = datetime(2026, 6, 19, 14, 30)
-    end = datetime(2026, 6, 21, 10, 0)
+    start = datetime(2026, 6, 19, 14, 30, tzinfo=timezone.utc)
+    end = datetime(2026, 6, 21, 10, 0, tzinfo=timezone.utc)
     buckets = service._generate_buckets(start, end, Granularity.DAY)
     
     assert len(buckets) == 3
-    assert buckets[0]["start"] == datetime(2026, 6, 19, 0, 0)
-    assert buckets[0]["end"] == datetime(2026, 6, 20, 0, 0)
-    assert buckets[1]["start"] == datetime(2026, 6, 20, 0, 0)
-    assert buckets[1]["end"] == datetime(2026, 6, 21, 0, 0)
+    assert buckets[0]["start"] == datetime(2026, 6, 19, 0, 0, tzinfo=timezone.utc)
+    assert buckets[0]["end"] == datetime(2026, 6, 20, 0, 0, tzinfo=timezone.utc)
+    assert buckets[1]["start"] == datetime(2026, 6, 20, 0, 0, tzinfo=timezone.utc)
+    assert buckets[1]["end"] == datetime(2026, 6, 21, 0, 0, tzinfo=timezone.utc)
 
 def test_generate_buckets_monthly(service):
-    start = datetime(2026, 4, 15)
-    end = datetime(2026, 6, 10)
+    start = datetime(2026, 4, 15, tzinfo=timezone.utc)
+    end = datetime(2026, 6, 10, tzinfo=timezone.utc)
     buckets = service._generate_buckets(start, end, Granularity.MONTH)
     
     assert len(buckets) == 3
-    assert buckets[0]["start"] == datetime(2026, 4, 1, 0, 0)
-    assert buckets[0]["end"] == datetime(2026, 5, 1, 0, 0)
-    assert buckets[1]["start"] == datetime(2026, 5, 1, 0, 0)
-    assert buckets[1]["end"] == datetime(2026, 6, 1, 0, 0)
-    assert buckets[2]["start"] == datetime(2026, 6, 1, 0, 0)
-    assert buckets[2]["end"] == datetime(2026, 7, 1, 0, 0)
+    assert buckets[0]["start"] == datetime(2026, 4, 1, 0, 0, tzinfo=timezone.utc)
+    assert buckets[0]["end"] == datetime(2026, 5, 1, 0, 0, tzinfo=timezone.utc)
+    assert buckets[1]["start"] == datetime(2026, 5, 1, 0, 0, tzinfo=timezone.utc)
+    assert buckets[1]["end"] == datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc)
+    assert buckets[2]["start"] == datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc)
+    assert buckets[2]["end"] == datetime(2026, 7, 1, 0, 0, tzinfo=timezone.utc)
 
 def test_calculate_intersecting_days(service):
     # Perfect overlap
     days = service._calculate_intersecting_days(
-        datetime(2026, 6, 1), datetime(2026, 6, 30),
-        datetime(2026, 6, 1), datetime(2026, 6, 30)
+        datetime(2026, 6, 1, tzinfo=timezone.utc), datetime(2026, 6, 30, tzinfo=timezone.utc),
+        datetime(2026, 6, 1, tzinfo=timezone.utc), datetime(2026, 6, 30, tzinfo=timezone.utc)
     )
     assert days == 29 # days difference: 30 - 1 = 29
 
     # Partial overlap
     days = service._calculate_intersecting_days(
-        datetime(2026, 6, 15), datetime(2026, 6, 25),
-        datetime(2026, 6, 20), datetime(2026, 7, 1)
+        datetime(2026, 6, 15, tzinfo=timezone.utc), datetime(2026, 6, 25, tzinfo=timezone.utc),
+        datetime(2026, 6, 20, tzinfo=timezone.utc), datetime(2026, 7, 1, tzinfo=timezone.utc)
     )
     assert days == 5 # 20 to 25
 
@@ -68,15 +68,15 @@ def test_budget_downscaling_yearly_to_monthly(service):
         category_id=cat_id,
         amount=Decimal("1200.00"),
         period=365,
-        start_date=datetime(2026, 1, 1),
-        end_date=datetime(2027, 1, 1),
+        start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        end_date=datetime(2027, 1, 1, tzinfo=timezone.utc),
         is_active=True
     )
     
     val = service._calculate_category_budget_for_bucket(
         [budget],
-        datetime(2026, 6, 1),
-        datetime(2026, 7, 1),
+        datetime(2026, 6, 1, tzinfo=timezone.utc),
+        datetime(2026, 7, 1, tzinfo=timezone.utc),
         Granularity.MONTH
     )
     assert float(val) == 100.0
@@ -90,8 +90,8 @@ def test_budget_same_level_overlap(service):
         category_id=cat_id,
         amount=Decimal("500.00"),
         period=30,
-        start_date=datetime(2026, 6, 1),
-        end_date=datetime(2026, 7, 1),
+        start_date=datetime(2026, 6, 1, tzinfo=timezone.utc),
+        end_date=datetime(2026, 7, 1, tzinfo=timezone.utc),
         is_active=True
     )
     b2 = BudgetORM(
@@ -99,15 +99,15 @@ def test_budget_same_level_overlap(service):
         category_id=cat_id,
         amount=Decimal("600.00"),
         period=30,
-        start_date=datetime(2026, 6, 10),
-        end_date=datetime(2026, 7, 10),
+        start_date=datetime(2026, 6, 10, tzinfo=timezone.utc),
+        end_date=datetime(2026, 7, 10, tzinfo=timezone.utc),
         is_active=True
     )
     
     val = service._calculate_category_budget_for_bucket(
         [b1, b2],
-        datetime(2026, 6, 1),
-        datetime(2026, 7, 1),
+        datetime(2026, 6, 1, tzinfo=timezone.utc),
+        datetime(2026, 7, 1, tzinfo=timezone.utc),
         Granularity.MONTH
     )
     assert float(val) == 600.0
@@ -122,15 +122,15 @@ def test_budget_upscaling_daily_to_monthly(service):
         category_id=cat_id,
         amount=Decimal("10.00"),
         period=1,
-        start_date=datetime(2026, 6, 15),
-        end_date=datetime(2026, 6, 16),
+        start_date=datetime(2026, 6, 15, tzinfo=timezone.utc),
+        end_date=datetime(2026, 6, 16, tzinfo=timezone.utc),
         is_active=True
     )
     
     val = service._calculate_category_budget_for_bucket(
         [b],
-        datetime(2026, 6, 1),
-        datetime(2026, 7, 1),
+        datetime(2026, 6, 1, tzinfo=timezone.utc),
+        datetime(2026, 7, 1, tzinfo=timezone.utc),
         Granularity.MONTH
     )
     assert float(val) == 10.0
@@ -141,18 +141,18 @@ def test_calculate_stats_integration(service):
     
     # Mock repository data
     service.repo.get_transactions_in_range.return_value = [
-        TransactionORM(amount=Decimal("-50.00"), transaction_date=datetime(2026, 6, 19, 10, 0), user_id=user_id, category_id=cat_id),
-        TransactionORM(amount=Decimal("150.00"), transaction_date=datetime(2026, 6, 20, 14, 0), user_id=user_id, category_id=cat_id)
+        TransactionORM(amount=Decimal("-50.00"), transaction_date=datetime(2026, 6, 19, 10, 0, tzinfo=timezone.utc), user_id=user_id, category_id=cat_id),
+        TransactionORM(amount=Decimal("150.00"), transaction_date=datetime(2026, 6, 20, 14, 0, tzinfo=timezone.utc), user_id=user_id, category_id=cat_id)
     ]
     service.repo.get_overlapping_budgets.return_value = [
-        BudgetORM(category_id=cat_id, amount=Decimal("30.00"), period=1, start_date=datetime(2026, 6, 19), end_date=datetime(2026, 6, 20), is_active=True)
+        BudgetORM(category_id=cat_id, amount=Decimal("30.00"), period=1, start_date=datetime(2026, 6, 19, tzinfo=timezone.utc), end_date=datetime(2026, 6, 20, tzinfo=timezone.utc), is_active=True)
     ]
 
     res = service.calculate_stats(
         user_id=user_id,
         granularity=Granularity.DAY,
-        start_date=datetime(2026, 6, 19),
-        end_date=datetime(2026, 6, 21)
+        start_date=datetime(2026, 6, 19, tzinfo=timezone.utc),
+        end_date=datetime(2026, 6, 21, tzinfo=timezone.utc)
     )
 
     assert len(res.buckets) == 2
@@ -176,7 +176,7 @@ def test_calculate_api_endpoint(mock_db):
     # We mock calculate_stats method on StatisticsService
     mock_response = FinancialStatsResponse(
         buckets=[
-            StatsBucketDto(spending=Decimal("50.00"), income=Decimal("0.00"), budget=Decimal("30.00"), start_date=datetime(2026, 6, 19))
+            StatsBucketDto(spending=Decimal("50.00"), income=Decimal("0.00"), budget=Decimal("30.00"), start_date=datetime(2026, 6, 19, tzinfo=timezone.utc))
         ],
         highest_spending_bucket_index=0,
         highest_value=Decimal("50.00")
@@ -190,8 +190,8 @@ def test_calculate_api_endpoint(mock_db):
         payload = {
             "user_id": str(uuid.uuid4()),
             "granularity": "DAY",
-            "start_date": "2026-06-19T00:00:00",
-            "end_date": "2026-06-20T00:00:00"
+            "start_date": "2026-06-19T00:00:00Z",
+            "end_date": "2026-06-20T00:00:00Z"
         }
         resp = client.post("/api/v1/statistics/calculate", json=payload)
         assert resp.status_code == 200
@@ -206,17 +206,17 @@ def test_calculate_api_endpoint(mock_db):
 
 def test_generate_buckets_weekly_sunday_to_saturday(service):
     # Sunday is June 14, Monday is June 15, Saturday is June 20
-    start = datetime(2026, 6, 15, 14, 30) # Monday
-    end = datetime(2026, 6, 21, 10, 0) # Next Sunday (June 21 is a Sunday)
+    start = datetime(2026, 6, 15, 14, 30, tzinfo=timezone.utc) # Monday
+    end = datetime(2026, 6, 21, 10, 0, tzinfo=timezone.utc) # Next Sunday (June 21 is a Sunday)
     buckets = service._generate_buckets(start, end, Granularity.WEEK)
     
     assert len(buckets) == 2
     # Week 1: June 14 (Sunday) to June 21 (Sunday)
-    assert buckets[0]["start"] == datetime(2026, 6, 14, 0, 0)
-    assert buckets[0]["end"] == datetime(2026, 6, 21, 0, 0)
+    assert buckets[0]["start"] == datetime(2026, 6, 14, 0, 0, tzinfo=timezone.utc)
+    assert buckets[0]["end"] == datetime(2026, 6, 21, 0, 0, tzinfo=timezone.utc)
     # Week 2: June 21 (Sunday) to June 28 (Sunday)
-    assert buckets[1]["start"] == datetime(2026, 6, 21, 0, 0)
-    assert buckets[1]["end"] == datetime(2026, 6, 28, 0, 0)
+    assert buckets[1]["start"] == datetime(2026, 6, 21, 0, 0, tzinfo=timezone.utc)
+    assert buckets[1]["end"] == datetime(2026, 6, 28, 0, 0, tzinfo=timezone.utc)
 
 def test_calculate_stats_highest_value_integration(service):
     user_id = uuid.uuid4()
@@ -224,18 +224,18 @@ def test_calculate_stats_highest_value_integration(service):
     
     # Mock repository data
     service.repo.get_transactions_in_range.return_value = [
-        TransactionORM(amount=Decimal("-50.00"), transaction_date=datetime(2026, 6, 19, 10, 0), user_id=user_id, category_id=cat_id),
-        TransactionORM(amount=Decimal("150.00"), transaction_date=datetime(2026, 6, 20, 14, 0), user_id=user_id, category_id=cat_id)
+        TransactionORM(amount=Decimal("-50.00"), transaction_date=datetime(2026, 6, 19, 10, 0, tzinfo=timezone.utc), user_id=user_id, category_id=cat_id),
+        TransactionORM(amount=Decimal("150.00"), transaction_date=datetime(2026, 6, 20, 14, 0, tzinfo=timezone.utc), user_id=user_id, category_id=cat_id)
     ]
     service.repo.get_overlapping_budgets.return_value = [
-        BudgetORM(category_id=cat_id, amount=Decimal("30.00"), period=1, start_date=datetime(2026, 6, 19), end_date=datetime(2026, 6, 20), is_active=True)
+        BudgetORM(category_id=cat_id, amount=Decimal("30.00"), period=1, start_date=datetime(2026, 6, 19, tzinfo=timezone.utc), end_date=datetime(2026, 6, 20, tzinfo=timezone.utc), is_active=True)
     ]
 
     res = service.calculate_stats(
         user_id=user_id,
         granularity=Granularity.DAY,
-        start_date=datetime(2026, 6, 19),
-        end_date=datetime(2026, 6, 21)
+        start_date=datetime(2026, 6, 19, tzinfo=timezone.utc),
+        end_date=datetime(2026, 6, 21, tzinfo=timezone.utc)
     )
 
     # Bucket 0: spending=50.00, income=0.00, budget=30.00 -> max(50.00, 30.00) = 50.00
@@ -252,19 +252,19 @@ def test_calculate_budget_status_service(service):
     # Bucket 1: spending=95.00, limit=100.00 (95% -> risk)
     # Bucket 2: spending=110.00, limit=100.00 (110% -> overspend)
     service.repo.get_transactions_in_range.return_value = [
-        TransactionORM(amount=Decimal("-30.00"), transaction_date=datetime(2026, 6, 19, 10, 0), user_id=user_id, category_id=cat_id),
-        TransactionORM(amount=Decimal("-95.00"), transaction_date=datetime(2026, 6, 20, 10, 0), user_id=user_id, category_id=cat_id),
-        TransactionORM(amount=Decimal("-110.00"), transaction_date=datetime(2026, 6, 21, 10, 0), user_id=user_id, category_id=cat_id)
+        TransactionORM(amount=Decimal("-30.00"), transaction_date=datetime(2026, 6, 19, 10, 0, tzinfo=timezone.utc), user_id=user_id, category_id=cat_id),
+        TransactionORM(amount=Decimal("-95.00"), transaction_date=datetime(2026, 6, 20, 10, 0, tzinfo=timezone.utc), user_id=user_id, category_id=cat_id),
+        TransactionORM(amount=Decimal("-110.00"), transaction_date=datetime(2026, 6, 21, 10, 0, tzinfo=timezone.utc), user_id=user_id, category_id=cat_id)
     ]
     service.repo.get_overlapping_budgets.return_value = [
-        BudgetORM(category_id=cat_id, amount=Decimal("100.00"), period=1, start_date=datetime(2026, 6, 19), end_date=datetime(2026, 6, 22), is_active=True)
+        BudgetORM(category_id=cat_id, amount=Decimal("100.00"), period=1, start_date=datetime(2026, 6, 19, tzinfo=timezone.utc), end_date=datetime(2026, 6, 22, tzinfo=timezone.utc), is_active=True)
     ]
 
     res = service.calculate_budget_status(
         user_id=user_id,
         granularity=Granularity.DAY,
-        start_date=datetime(2026, 6, 19),
-        end_date=datetime(2026, 6, 22)
+        start_date=datetime(2026, 6, 19, tzinfo=timezone.utc),
+        end_date=datetime(2026, 6, 22, tzinfo=timezone.utc)
     )
 
     assert len(res.buckets) == 3
@@ -298,13 +298,13 @@ def test_get_top_categories_service(service):
     service.repo.get_transactions_in_range.side_effect = lambda uid, start, end: (
         [
             # June transactions
-            TransactionORM(amount=Decimal("-300.00"), transaction_date=datetime(2026, 6, 10), user_id=user_id, category_id=cat1_id),
-            TransactionORM(amount=Decimal("-1000.00"), transaction_date=datetime(2026, 6, 15), user_id=user_id, category_id=cat2_id)
+            TransactionORM(amount=Decimal("-300.00"), transaction_date=datetime(2026, 6, 10, tzinfo=timezone.utc), user_id=user_id, category_id=cat1_id),
+            TransactionORM(amount=Decimal("-1000.00"), transaction_date=datetime(2026, 6, 15, tzinfo=timezone.utc), user_id=user_id, category_id=cat2_id)
         ]
         if start.month == 6 else
         [
             # May transactions
-            TransactionORM(amount=Decimal("-200.00"), transaction_date=datetime(2026, 5, 10), user_id=user_id, category_id=cat1_id)
+            TransactionORM(amount=Decimal("-200.00"), transaction_date=datetime(2026, 5, 10, tzinfo=timezone.utc), user_id=user_id, category_id=cat1_id)
         ]
     )
 
@@ -312,7 +312,7 @@ def test_get_top_categories_service(service):
     res = service.get_top_categories(
         user_id=user_id,
         granularity=Granularity.MONTH,
-        now=datetime(2026, 7, 20)
+        now=datetime(2026, 7, 20, tzinfo=timezone.utc)
     )
 
     assert res.total_spending == Decimal("1300.00")
@@ -337,7 +337,7 @@ def test_new_endpoints_api_calls(mock_db):
     from spendoo.statistics.models import BudgetStatusBucketDto, BudgetStatusResponse, BudgetStatus
     mock_status_response = BudgetStatusResponse(
         buckets=[
-            BudgetStatusBucketDto(spending=Decimal("50.00"), status=BudgetStatus.WITHIN, percentage=Decimal("50.00"), start_date=datetime(2026, 6, 19))
+            BudgetStatusBucketDto(spending=Decimal("50.00"), status=BudgetStatus.WITHIN, percentage=Decimal("50.00"), start_date=datetime(2026, 6, 19, tzinfo=timezone.utc))
         ],
         highest_spending=Decimal("50.00")
     )
@@ -364,8 +364,8 @@ def test_new_endpoints_api_calls(mock_db):
         payload = {
             "user_id": user_uuid,
             "granularity": "DAY",
-            "start_date": "2026-06-19T00:00:00",
-            "end_date": "2026-06-20T00:00:00"
+            "start_date": "2026-06-19T00:00:00Z",
+            "end_date": "2026-06-20T00:00:00Z"
         }
         resp = client.post("/api/v1/statistics/budget-status", json=payload)
         assert resp.status_code == 200
@@ -400,22 +400,22 @@ def test_calculate_combined_stats_service_correctness(service):
     # Start: 2026-06-19, End: 2026-06-21 (2 buckets: 19th and 20th)
     service.repo.get_transactions_in_range.return_value = [
         # Preceding bucket transaction (June 18)
-        TransactionORM(amount=Decimal("-100.00"), transaction_date=datetime(2026, 6, 18, 12, 0), user_id=user_id, category_id=cat_id),
+        TransactionORM(amount=Decimal("-100.00"), transaction_date=datetime(2026, 6, 18, 12, 0, tzinfo=timezone.utc), user_id=user_id, category_id=cat_id),
         # Bucket 1 transaction (June 19)
-        TransactionORM(amount=Decimal("-50.00"), transaction_date=datetime(2026, 6, 19, 10, 0), user_id=user_id, category_id=cat_id),
+        TransactionORM(amount=Decimal("-50.00"), transaction_date=datetime(2026, 6, 19, 10, 0, tzinfo=timezone.utc), user_id=user_id, category_id=cat_id),
         # Bucket 2 transaction (June 20)
-        TransactionORM(amount=Decimal("-150.00"), transaction_date=datetime(2026, 6, 20, 14, 0), user_id=user_id, category_id=cat_id)
+        TransactionORM(amount=Decimal("-150.00"), transaction_date=datetime(2026, 6, 20, 14, 0, tzinfo=timezone.utc), user_id=user_id, category_id=cat_id)
     ]
     service.repo.get_overlapping_budgets.return_value = [
-        BudgetORM(category_id=cat_id, amount=Decimal("120.00"), period=1, start_date=datetime(2026, 6, 19), end_date=datetime(2026, 6, 21), is_active=True)
+        BudgetORM(category_id=cat_id, amount=Decimal("120.00"), period=1, start_date=datetime(2026, 6, 19, tzinfo=timezone.utc), end_date=datetime(2026, 6, 21, tzinfo=timezone.utc), is_active=True)
     ]
 
     res = service.calculate_combined_stats(
         user_id=user_id,
         granularity=Granularity.DAY,
-        start_date=datetime(2026, 6, 19),
-        end_date=datetime(2026, 6, 21),
-        now=datetime(2026, 6, 21)
+        start_date=datetime(2026, 6, 19, tzinfo=timezone.utc),
+        end_date=datetime(2026, 6, 21, tzinfo=timezone.utc),
+        now=datetime(2026, 6, 21, tzinfo=timezone.utc)
     )
 
     # 1. Financial stats checks
@@ -459,12 +459,12 @@ def test_combined_api_endpoint(mock_db):
     )
     mock_combined_response = CombinedStatsResponse(
         financial_stats=FinancialStatsResponse(
-            buckets=[StatsBucketDto(spending=Decimal("50.00"), income=Decimal("0.00"), budget=Decimal("30.00"), start_date=datetime(2026, 6, 19))],
+            buckets=[StatsBucketDto(spending=Decimal("50.00"), income=Decimal("0.00"), budget=Decimal("30.00"), start_date=datetime(2026, 6, 19, tzinfo=timezone.utc))],
             highest_spending_bucket_index=0,
             highest_value=Decimal("50.00")
         ),
         budget_status=BudgetStatusResponse(
-            buckets=[BudgetStatusBucketDto(spending=Decimal("50.00"), status=BudgetStatus.WITHIN, percentage=Decimal("50.00"), start_date=datetime(2026, 6, 19))],
+            buckets=[BudgetStatusBucketDto(spending=Decimal("50.00"), status=BudgetStatus.WITHIN, percentage=Decimal("50.00"), start_date=datetime(2026, 6, 19, tzinfo=timezone.utc))],
             highest_spending=Decimal("50.00")
         ),
         top_categories=TopCategoriesResponse(
@@ -480,8 +480,8 @@ def test_combined_api_endpoint(mock_db):
         payload = {
             "user_id": str(uuid.uuid4()),
             "granularity": "DAY",
-            "start_date": "2026-06-19T00:00:00",
-            "end_date": "2026-06-20T00:00:00"
+            "start_date": "2026-06-19T00:00:00Z",
+            "end_date": "2026-06-20T00:00:00Z"
         }
         resp = client.post("/api/v1/statistics/combined", json=payload)
         assert resp.status_code == 200
@@ -507,16 +507,16 @@ def test_income_subtraction_for_category_less_negative_transactions(service):
     # 2. Moving to budget (negative, no category): -50.00
     # Net income should be 150.00 - 50.00 = 100.00
     service.repo.get_transactions_in_range.return_value = [
-        TransactionORM(amount=Decimal("150.00"), transaction_date=datetime(2026, 6, 19, 10, 0), user_id=user_id, category_id=cat_id),
-        TransactionORM(amount=Decimal("-50.00"), transaction_date=datetime(2026, 6, 19, 12, 0), user_id=user_id, category_id=None)
+        TransactionORM(amount=Decimal("150.00"), transaction_date=datetime(2026, 6, 19, 10, 0, tzinfo=timezone.utc), user_id=user_id, category_id=cat_id),
+        TransactionORM(amount=Decimal("-50.00"), transaction_date=datetime(2026, 6, 19, 12, 0, tzinfo=timezone.utc), user_id=user_id, category_id=None)
     ]
     service.repo.get_overlapping_budgets.return_value = []
 
     res = service.calculate_stats(
         user_id=user_id,
         granularity=Granularity.DAY,
-        start_date=datetime(2026, 6, 19),
-        end_date=datetime(2026, 6, 20)
+        start_date=datetime(2026, 6, 19, tzinfo=timezone.utc),
+        end_date=datetime(2026, 6, 20, tzinfo=timezone.utc)
     )
 
     assert len(res.buckets) == 1
@@ -533,19 +533,19 @@ def test_budget_status_ignores_income(service):
     # If compared only with budget = 100.00, then 95 / 100 = 95% -> risk
     service.repo.get_transactions_in_range.return_value = [
         # Income transaction (+50.00)
-        TransactionORM(amount=Decimal("50.00"), transaction_date=datetime(2026, 6, 19, 9, 0), user_id=user_id, category_id=cat_id),
+        TransactionORM(amount=Decimal("50.00"), transaction_date=datetime(2026, 6, 19, 9, 0, tzinfo=timezone.utc), user_id=user_id, category_id=cat_id),
         # Spending transaction (-95.00)
-        TransactionORM(amount=Decimal("-95.00"), transaction_date=datetime(2026, 6, 19, 10, 0), user_id=user_id, category_id=cat_id)
+        TransactionORM(amount=Decimal("-95.00"), transaction_date=datetime(2026, 6, 19, 10, 0, tzinfo=timezone.utc), user_id=user_id, category_id=cat_id)
     ]
     service.repo.get_overlapping_budgets.return_value = [
-        BudgetORM(category_id=cat_id, amount=Decimal("100.00"), period=1, start_date=datetime(2026, 6, 19), end_date=datetime(2026, 6, 20), is_active=True)
+        BudgetORM(category_id=cat_id, amount=Decimal("100.00"), period=1, start_date=datetime(2026, 6, 19, tzinfo=timezone.utc), end_date=datetime(2026, 6, 20, tzinfo=timezone.utc), is_active=True)
     ]
 
     res = service.calculate_budget_status(
         user_id=user_id,
         granularity=Granularity.DAY,
-        start_date=datetime(2026, 6, 19),
-        end_date=datetime(2026, 6, 20)
+        start_date=datetime(2026, 6, 19, tzinfo=timezone.utc),
+        end_date=datetime(2026, 6, 20, tzinfo=timezone.utc)
     )
 
     assert len(res.buckets) == 1
@@ -562,9 +562,9 @@ def test_calculate_combined_stats_empty_transactions(service):
     res = service.calculate_combined_stats(
         user_id=user_id,
         granularity=Granularity.DAY,
-        start_date=datetime(2026, 6, 19),
-        end_date=datetime(2026, 6, 21),
-        now=datetime(2026, 6, 21)
+        start_date=datetime(2026, 6, 19, tzinfo=timezone.utc),
+        end_date=datetime(2026, 6, 21, tzinfo=timezone.utc),
+        now=datetime(2026, 6, 21, tzinfo=timezone.utc)
     )
 
     assert res.top_categories.total_spending == Decimal("0.00")
@@ -576,22 +576,22 @@ def test_calculate_budget_status_now_limitation(service):
     cat_id = uuid.uuid4()
     
     service.repo.get_transactions_in_range.return_value = [
-        TransactionORM(amount=Decimal("-30.00"), transaction_date=datetime(2026, 6, 19, 10, 0), user_id=user_id, category_id=cat_id),
+        TransactionORM(amount=Decimal("-30.00"), transaction_date=datetime(2026, 6, 19, 10, 0, tzinfo=timezone.utc), user_id=user_id, category_id=cat_id),
     ]
     service.repo.get_overlapping_budgets.return_value = [
-        BudgetORM(category_id=cat_id, amount=Decimal("100.00"), period=1, start_date=datetime(2026, 6, 19), end_date=datetime(2026, 6, 22), is_active=True)
+        BudgetORM(category_id=cat_id, amount=Decimal("100.00"), period=1, start_date=datetime(2026, 6, 19, tzinfo=timezone.utc), end_date=datetime(2026, 6, 22, tzinfo=timezone.utc), is_active=True)
     ]
 
     res = service.calculate_budget_status(
         user_id=user_id,
         granularity=Granularity.DAY,
-        start_date=datetime(2026, 6, 19),
-        end_date=datetime(2026, 6, 22),
-        now=datetime(2026, 6, 20)  # min(end_date, now) = June 20
+        start_date=datetime(2026, 6, 19, tzinfo=timezone.utc),
+        end_date=datetime(2026, 6, 22, tzinfo=timezone.utc),
+        now=datetime(2026, 6, 20, tzinfo=timezone.utc)  # min(end_date, now) = June 20
     )
 
     assert len(res.buckets) == 1
-    assert res.buckets[0].start_date == datetime(2026, 6, 19)
+    assert res.buckets[0].start_date == datetime(2026, 6, 19, tzinfo=timezone.utc)
     assert res.buckets[0].spending == Decimal("30.00")
 
 
@@ -604,23 +604,45 @@ def test_calculate_combined_stats_now_limitation_budget_status(service):
         CategoryORM(id=cat_id, category_name="Food", category_icon="fastfood", user_id=user_id)
     ]
     service.repo.get_transactions_in_range.return_value = [
-        TransactionORM(amount=Decimal("-30.00"), transaction_date=datetime(2026, 6, 19, 10, 0), user_id=user_id, category_id=cat_id),
+        TransactionORM(amount=Decimal("-30.00"), transaction_date=datetime(2026, 6, 19, 10, 0, tzinfo=timezone.utc), user_id=user_id, category_id=cat_id),
     ]
     service.repo.get_overlapping_budgets.return_value = [
-        BudgetORM(category_id=cat_id, amount=Decimal("100.00"), period=1, start_date=datetime(2026, 6, 19), end_date=datetime(2026, 6, 22), is_active=True)
+        BudgetORM(category_id=cat_id, amount=Decimal("100.00"), period=1, start_date=datetime(2026, 6, 19, tzinfo=timezone.utc), end_date=datetime(2026, 6, 22, tzinfo=timezone.utc), is_active=True)
     ]
 
     res = service.calculate_combined_stats(
         user_id=user_id,
         granularity=Granularity.DAY,
-        start_date=datetime(2026, 6, 19),
-        end_date=datetime(2026, 6, 22),
-        now=datetime(2026, 6, 20)  # min(end_date, now) = June 20
+        start_date=datetime(2026, 6, 19, tzinfo=timezone.utc),
+        end_date=datetime(2026, 6, 22, tzinfo=timezone.utc),
+        now=datetime(2026, 6, 20, tzinfo=timezone.utc)  # min(end_date, now) = June 20
     )
 
     assert len(res.financial_stats.buckets) == 3
     assert len(res.budget_status.buckets) == 1
-    assert res.budget_status.buckets[0].start_date == datetime(2026, 6, 19)
+    assert res.budget_status.buckets[0].start_date == datetime(2026, 6, 19, tzinfo=timezone.utc)
+
+
+def test_calculate_combined_stats_offset_naive_now(service):
+    user_id = uuid.uuid4()
+    cat_id = uuid.uuid4()
+    from spendoo.categorization.models import CategoryORM
+
+    service.repo.get_user_categories.return_value = [
+        CategoryORM(id=cat_id, category_name="Food", category_icon="fastfood", user_id=user_id)
+    ]
+    service.repo.get_transactions_in_range.return_value = []
+    service.repo.get_overlapping_budgets.return_value = []
+
+    res = service.calculate_combined_stats(
+        user_id=user_id,
+        granularity=Granularity.DAY,
+        start_date=datetime(2026, 6, 19, tzinfo=timezone.utc),
+        end_date=datetime(2026, 6, 22, tzinfo=timezone.utc),
+        now=datetime(2026, 6, 20)  # naive datetime
+    )
+
+    assert len(res.financial_stats.buckets) == 3
 
 
 

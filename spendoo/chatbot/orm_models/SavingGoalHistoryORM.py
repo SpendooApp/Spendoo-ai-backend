@@ -13,7 +13,7 @@ class SavingGoalHistoryORM(Base):
     __table_args__ = {"schema": "saving_goals"}
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     amount = Column(Numeric, nullable=False)
-    created_at = Column("created_at", DateTime, nullable=False)
+    created_at = Column("created_at", DateTime(timezone=True), nullable=False)
     goal_id = Column(
         "goal_id",
         UUID(as_uuid=True),
