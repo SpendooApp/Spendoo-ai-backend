@@ -15,8 +15,8 @@ class ScheduledPaymentORM(Base):
     user_id = Column("user_id", UUID(as_uuid=True), nullable=False)
     title = Column(String, nullable=False)
     amount = Column(Numeric, nullable=False)
-    start_date = Column("start_date", DateTime, nullable=False)
-    next_due_date = Column("next_due_date", DateTime, nullable=False)
+    start_date = Column("start_date", DateTime(timezone=True), nullable=False)
+    next_due_date = Column("next_due_date", DateTime(timezone=True), nullable=False)
     frequency = Column(Integer, nullable=False)
     category_id = Column(
         "category_id",

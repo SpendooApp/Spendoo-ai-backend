@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timezone, timedelta
 import uuid
 from decimal import Decimal
 from typing import List, Dict
@@ -45,6 +45,7 @@ class StatisticsService:
         # 2. Fetch data in single DB calls
         transactions = self.repo.get_transactions_in_range(user_id, first_bucket_start, last_bucket_end, category_id)
         budgets = self.repo.get_overlapping_budgets(user_id, first_bucket_start, last_bucket_end, category_id)
+        self._normalize_db_records(transactions, budgets)
 
         # Group budgets by category
         budgets_by_category: Dict[uuid.UUID, List[BudgetORM]] = defaultdict(list)
@@ -81,7 +82,7 @@ class StatisticsService:
                 spending=spending.quantize(Decimal("1.00")),
                 income=income.quantize(Decimal("1.00")),
                 budget=total_budget.quantize(Decimal("1.00")),
-                start_date=k_start
+                start_date=k_start.replace(tzinfo=timezone.utc) if k_start.tzinfo is None else k_start
             )
             bucket_dtos.append(b_dto)
 
@@ -110,9 +111,7 @@ class StatisticsService:
         upper_bound: datetime = None
     ) -> List[Dict[str, datetime]]:
         if upper_bound is not None:
-            if upper_bound.tzinfo is not None:
-                upper_bound = upper_bound.replace(tzinfo=None)
-            end = min(end, upper_bound)
+                        end = min(end, upper_bound)
 
         # Align start date to bucket boundary
         if granularity == Granularity.DAY:
@@ -259,9 +258,10 @@ class StatisticsService:
     ) -> BudgetStatusResponse:
         start_date, end_date = self._normalize_dates(start_date, end_date)
         if now is None:
-            now = datetime.now()
-        if now.tzinfo is not None:
-            now = now.replace(tzinfo=None)
+            now = datetime.now(timezone.utc)
+        elif now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        
 
         # 1. Generate Buckets
         buckets_ranges = self._generate_buckets(start_date, end_date, granularity, now)
@@ -274,6 +274,7 @@ class StatisticsService:
         # 2. Fetch data in single DB calls
         transactions = self.repo.get_transactions_in_range(user_id, first_bucket_start, last_bucket_end)
         budgets = self.repo.get_overlapping_budgets(user_id, first_bucket_start, last_bucket_end)
+        self._normalize_db_records(transactions, budgets)
 
         # Group budgets by category
         budgets_by_category: Dict[uuid.UUID, List[BudgetORM]] = defaultdict(list)
@@ -309,7 +310,7 @@ class StatisticsService:
                 spending=spending.quantize(Decimal("1.00")),
                 status=status,
                 percentage=percentage.quantize(Decimal("1.00")),
-                start_date=k_start
+                start_date=k_start.replace(tzinfo=timezone.utc) if k_start.tzinfo is None else k_start
             )
             bucket_dtos.append(b_dto)
 
@@ -328,7 +329,9 @@ class StatisticsService:
         now: datetime = None
     ) -> TopCategoriesResponse:
         if now is None:
-            now = datetime.now()
+            now = datetime.now(timezone.utc)
+        elif now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
 
         # ── Last completed bucket, not the current in-progress one ───────────────
         curr_start = self._get_last_completed_bucket_start(now, granularity)
@@ -341,6 +344,8 @@ class StatisticsService:
         # ── Fetch transactions for both windows ───────────────────────────────────
         tx_curr = self.repo.get_transactions_in_range(user_id, curr_start, curr_end)
         tx_prev = self.repo.get_transactions_in_range(user_id, prev_start, prev_end)
+        self._normalize_db_records(tx_curr, [])
+        self._normalize_db_records(tx_prev, [])
 
         # ── Aggregate current period ──────────────────────────────────────────────
         curr_spending_by_cat = defaultdict(Decimal)
@@ -376,9 +381,10 @@ class StatisticsService:
         start_date, end_date = self._normalize_dates(start_date, end_date)
         # 1. Generate Buckets
         if now is None:
-            now = datetime.now()
-        if now.tzinfo is not None:
-            now = now.replace(tzinfo=None)
+            now = datetime.now(timezone.utc)
+        elif now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        
 
         buckets_ranges = self._generate_buckets(start_date, end_date, granularity)
 
@@ -404,6 +410,7 @@ class StatisticsService:
         fetch_end = max(last_completed_end, last_bucket_end)
         transactions = self.repo.get_transactions_in_range(user_id, fetch_start, fetch_end)
         budgets = self.repo.get_overlapping_budgets(user_id, first_bucket_start, last_bucket_end)
+        self._normalize_db_records(transactions, budgets)
 
         # Group budgets by category
         budgets_by_category: Dict[uuid.UUID, List[BudgetORM]] = defaultdict(list)
@@ -453,7 +460,7 @@ class StatisticsService:
                 spending=spending.quantize(Decimal("1.00")),
                 income=income.quantize(Decimal("1.00")),
                 budget=total_budget.quantize(Decimal("1.00")),
-                start_date=k_start
+                start_date=k_start.replace(tzinfo=timezone.utc) if k_start.tzinfo is None else k_start
             )
             stats_bucket_dtos.append(fs_dto)
 
@@ -474,7 +481,7 @@ class StatisticsService:
                     spending=spending.quantize(Decimal("1.00")),
                     status=status,
                     percentage=percentage.quantize(Decimal("1.00")),
-                    start_date=k_start
+                    start_date=k_start.replace(tzinfo=timezone.utc) if k_start.tzinfo is None else k_start
                 )
                 status_bucket_dtos.append(bs_dto)
 
@@ -503,10 +510,10 @@ class StatisticsService:
         )
 
     def _normalize_dates(self, start_date: datetime, end_date: datetime) -> tuple[datetime, datetime]:
-        if start_date.tzinfo is not None:
-            start_date = start_date.replace(tzinfo=None)
-        if end_date.tzinfo is not None:
-            end_date = end_date.replace(tzinfo=None)
+        if start_date.tzinfo is None:
+            start_date = start_date.replace(tzinfo=timezone.utc)
+        if end_date.tzinfo is None:
+            end_date = end_date.replace(tzinfo=timezone.utc)
         return start_date, end_date
 
     def _determine_budget_status(self, spending: Decimal, total_budget: Decimal) -> tuple[Decimal, BudgetStatus]:
@@ -637,5 +644,19 @@ class StatisticsService:
         elif granularity == Granularity.YEAR:
             return now.replace(year=now.year - 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
         return (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    def _normalize_db_records(
+        self,
+        transactions: List[TransactionORM],
+        budgets: List[BudgetORM]
+    ) -> None:
+        for t in transactions:
+            if t.transaction_date and t.transaction_date.tzinfo is None:
+                t.transaction_date = t.transaction_date.replace(tzinfo=timezone.utc)
+        for b in budgets:
+            if b.start_date and b.start_date.tzinfo is None:
+                b.start_date = b.start_date.replace(tzinfo=timezone.utc)
+            if b.end_date and b.end_date.tzinfo is None:
+                b.end_date = b.end_date.replace(tzinfo=timezone.utc)
 
 

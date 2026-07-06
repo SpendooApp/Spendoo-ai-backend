@@ -9,21 +9,21 @@ from spendoo.statistics.models import (
     BudgetStatusBucketDto,
     TopCategoriesResponse,
 )
-from datetime import datetime
+from pydantic import AwareDatetime
 from decimal import Decimal
 
 class ForecastRequest(BaseModel):
     user_id: uuid.UUID
     granularity: Granularity
-    start_date: datetime
-    end_date: datetime
+    start_date: AwareDatetime
+    end_date: AwareDatetime
     category_id: Optional[uuid.UUID] = None  # if None, forecast all categories combined
 
 class ForecastBucketDto(BaseModel):
     spending: Decimal
     income: Decimal = Decimal("0.00")  # always 0 for predicted
     budget: Decimal
-    start_date: datetime
+    start_date: AwareDatetime
     predicted: bool
 
 class ForecastResponse(BaseModel):
@@ -36,7 +36,7 @@ class CombinedForecastBucketDto(BaseModel):
     spending:          Decimal
     income:            Decimal = Decimal("0.00")
     budget:            Decimal
-    start_date:        datetime
+    start_date:        AwareDatetime
     predicted:         bool
     status:  Optional[BudgetStatus] = None  # None for history buckets
 

@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import List
-from datetime import datetime
+from pydantic import AwareDatetime
 from enum import Enum
 import uuid
 from decimal import Decimal
@@ -14,14 +14,14 @@ class Granularity(str, Enum):
 class StatsRequest(BaseModel):
     user_id: uuid.UUID
     granularity: Granularity
-    start_date: datetime
-    end_date: datetime
+    start_date: AwareDatetime
+    end_date: AwareDatetime
 
 class StatsBucketDto(BaseModel):
     spending: Decimal
     income: Decimal
     budget: Decimal
-    start_date: datetime
+    start_date: AwareDatetime
 
 class FinancialStatsResponse(BaseModel):
     buckets: List[StatsBucketDto]
@@ -37,7 +37,7 @@ class BudgetStatusBucketDto(BaseModel):
     spending: Decimal
     status: BudgetStatus
     percentage: Decimal
-    start_date: datetime
+    start_date: AwareDatetime
 
 class BudgetStatusResponse(BaseModel):
     buckets: List[BudgetStatusBucketDto]

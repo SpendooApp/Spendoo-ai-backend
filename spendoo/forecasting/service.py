@@ -189,11 +189,15 @@ class ForecastService:
                 )
                 for b in history_buckets
             ]
-            return FinancialStatsForecastResponse(
-                buckets=result_buckets,
-                highest_spending_bucket_index=int(history_response.financial_stats.highest_spending_bucket_index),
-                highest_value=history_response.financial_stats.highest_value,
-                predict=False
+            return CombinedForecastResponse(
+                financial_stats_forecast=FinancialStatsForecastResponse(
+                    buckets=result_buckets,
+                    highest_spending_bucket_index=int(history_response.financial_stats.highest_spending_bucket_index),
+                    highest_value=history_response.financial_stats.highest_value,
+                    predict=False
+                ),
+                budget_status=history_response.budget_status,
+                top_categories=history_response.top_categories
             )
         
         # ── 5. Build spending and budget series
@@ -328,7 +332,7 @@ class ForecastService:
                 curr = curr.replace(year=year, month=month, day=1)
             elif granularity == Granularity.YEAR:
                 curr = curr.replace(year=curr.year + 1)
-            dates.append(curr)
+            dates.append(curr.replace(tzinfo=timezone.utc) if curr.tzinfo is None else curr)
         return dates
     
 

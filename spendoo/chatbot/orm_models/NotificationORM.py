@@ -17,4 +17,4 @@ class NotificationORM(Base):
     message = Column(String, nullable=False)
     type = Column(String, nullable=False)
     is_read = Column("is_read", Boolean, nullable=False)
-    sent_at = Column("sent_at", DateTime, nullable=False)
+    sent_at = Column("sent_at", DateTime(timezone=True), nullable=False)
