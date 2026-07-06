@@ -125,7 +125,7 @@ class ForecastService:
         forecast_budget = self._fit_and_forecast(budget_series, horizon, granularity)
 
         # ── 6. Generate future bucket start dates
-        future_dates = self._generate_future_dates(dates[-1], granularity, horizon)
+        future_dates = self._generate_future_dates(history_end, granularity, horizon)
 
         # ── 7. Append predicted buckets
         for val_s, val_b, fd in zip(forecast_spending, forecast_budget, future_dates):
@@ -310,15 +310,12 @@ class ForecastService:
         return np.clip(forecast, a_min=0, a_max=None)   # spending and budget can't be negative
 
 
-    def _generate_future_dates(
-        self,
-        last_date: datetime,
-        granularity: Granularity,
-        horizon: int
-    ) -> list[datetime]:
+    def _generate_future_dates(self, from_date, granularity, horizon):
         dates = []
-        curr  = last_date
+        curr = from_date
         for _ in range(horizon):
+            curr = curr.replace(tzinfo=timezone.utc)  # convert to naive datetime for consistency
+            dates.append(curr)    # ← append first (July 5 gets included)
             if granularity == Granularity.DAY:
                 curr = curr + timedelta(days=1)
             elif granularity == Granularity.WEEK:
@@ -332,12 +329,4 @@ class ForecastService:
                 curr = curr.replace(year=year, month=month, day=1)
             elif granularity == Granularity.YEAR:
                 curr = curr.replace(year=curr.year + 1)
-            dates.append(curr.replace(tzinfo=timezone.utc) if curr.tzinfo is None else curr)
         return dates
-    
-
-    
-
-
-
-   
