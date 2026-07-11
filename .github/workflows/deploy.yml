@@ -11,24 +11,65 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Build Docker image
-        run: docker build -t josephsameh/spendoo-ai-backend:latest .
-
-      - name: Push Docker image
+      - name: Sync Config Vars to Heroku
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+          HEROKU_APP_NAME: ${{ secrets.HEROKU_APP_NAME }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          AZURE_ENDPOINT: ${{ secrets.AZURE_ENDPOINT }}
+          AZURE_KEY: ${{ secrets.AZURE_KEY }}
+          GITHUB_TOKENS: ${{ secrets.GIT_HUB_TOKENS }}
+          HMAC_SECRET_KEY: ${{ secrets.HMAC_SECRET_KEY }}
+          SPENDOO_DEPLOY: "true"
         run: |
-          echo ${{ secrets.DOCKER_HUB_PASSWORD }} | docker login -u ${{ secrets.DOCKER_HUB_USERNAME }} --password-stdin
-          docker push josephsameh/spendoo-ai-backend:latest
+          python -c '
+          import os, urllib.request, json
+          api_key = os.environ.get("HEROKU_API_KEY")
+          app_name = os.environ.get("HEROKU_APP_NAME")
+          if not api_key or not app_name:
+              print("Missing Heroku API key or app name")
+              exit(1)
+          keys = [
+              "GROQ_API_KEY", "MISTRAL_API_KEY", "GEMINI_API_KEY", "DATABASE_URL",
+              "AZURE_ENDPOINT", "AZURE_KEY", "GITHUB_TOKENS", "HMAC_SECRET_KEY", "SPENDOO_DEPLOY"
+          ]
+          payload = {k: os.environ[k] for k in keys if os.environ.get(k)}
+          req = urllib.request.Request(
+              f"https://api.heroku.com/apps/{app_name}/config-vars",
+              data=json.dumps(payload).encode("utf-8"),
+              headers={
+                  "Accept": "application/vnd.heroku+json; version=3",
+                  "Authorization": f"Bearer {api_key}",
+                  "Content-Type": "application/json"
+              },
+              method="PATCH"
+          )
+          with urllib.request.urlopen(req) as resp:
+              print(resp.read().decode())
+          '
 
-      - name: Deploy on server
-        uses: appleboy/ssh-action@v0.1.5
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            docker pull josephsameh/spendoo-ai-backend:latest
-            docker stop spendoo-ai-container || true
-            docker rm spendoo-ai-container || true
-            docker run -d --restart=always --name spendoo-ai-container -p 8000:8000 \
-              -e GROQ_API_KEY="${{ secrets.GROQ_API_KEY }}" -e MISTRAL_API_KEY="${{ secrets.MISTRAL_API_KEY }}" -e SPENDOO_DEPLOY="${{ secrets.SPENDOO_DEPLOY }}" -e SPENDOO_ALLOWED_IP="${{ secrets.SPENDOO_ALLOWED_IP }}" -e GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}" -e DATABASE_URL="${{ secrets.DATABASE_URL }}" -e AZURE_ENDPOINT="${{ secrets.AZURE_ENDPOINT }}" -e AZURE_KEY="${{ secrets.AZURE_KEY }}" -e GITHUB_TOKENS="${{ secrets.GIT_HUB_TOKENS }}" josephsameh/spendoo-ai-backend:latest
-            docker image prune -f
+      - name: Install Heroku CLI
+        run: curl https://cli-assets.heroku.com/install-ubuntu.sh | sh
+
+      - name: Log in to Heroku Container Registry
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: heroku container:login
+
+      - name: Set Heroku Stack to Container
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: heroku stack:set container --app ${{ secrets.HEROKU_APP_NAME }}
+
+      - name: Build and Push Docker Image to Heroku
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: heroku container:push web --app ${{ secrets.HEROKU_APP_NAME }}
+
+      - name: Release Docker Image on Heroku
+        env:
+          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+        run: heroku container:release web --app ${{ secrets.HEROKU_APP_NAME }}
