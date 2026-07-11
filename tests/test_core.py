@@ -10,34 +10,63 @@ def test_core_health(client):
     assert resp.json() == {'status': 'ok'}
 
 
-def test_ip_restriction_middleware():
+def test_hmac_signing_middleware():
     import os
+    import time
+    import hmac
+    import hashlib
     from fastapi.testclient import TestClient
     from app import create_app
 
     original_deploy = os.environ.get("SPENDOO_DEPLOY")
+    original_secret = os.environ.get("HMAC_SECRET_KEY")
     os.environ["SPENDOO_DEPLOY"] = "true"
+    os.environ["HMAC_SECRET_KEY"] = "my_secret_key"
 
     try:
         app = create_app()
         client = TestClient(app)
 
-        # Request with a blocked client IP
-        resp = client.get('/api/v1/core/', headers={"x-forwarded-for": "192.168.1.100"})
-        assert resp.status_code == 403
-        assert resp.json() == {"detail": "Forbidden: IP 192.168.1.100 not allowed"}
+        timestamp_str = str(int(time.time()))
+        message = timestamp_str.encode("utf-8") + b""
+        sig = hmac.new(b"my_secret_key", message, hashlib.sha256).hexdigest()
 
-        # Request with default allowed client IPs
-        resp_allowed = client.get('/api/v1/core/', headers={"x-forwarded-for": "127.0.0.1"})
-        assert resp_allowed.status_code == 200
+        resp = client.get('/api/v1/core/', headers={
+            "x-signature": sig,
+            "x-timestamp": timestamp_str
+        })
+        assert resp.status_code == 200
 
-        # Request with Docker subnet allowed IPs
-        resp_subnet1 = client.get('/api/v1/core/', headers={"x-forwarded-for": "172.17.0.2"})
-        assert resp_subnet1.status_code == 200
+        resp_fail = client.get('/api/v1/core/', headers={
+            "x-signature": "wrong",
+            "x-timestamp": timestamp_str
+        })
+        assert resp_fail.status_code == 401
+    finally:
+        if original_deploy is not None:
+            os.environ["SPENDOO_DEPLOY"] = original_deploy
+        else:
+            del os.environ["SPENDOO_DEPLOY"]
+        if original_secret is not None:
+            os.environ["HMAC_SECRET_KEY"] = original_secret
+        else:
+            del os.environ["HMAC_SECRET_KEY"]
 
-        # Request with custom/other Docker subnet allowed IPs
-        resp_subnet2 = client.get('/api/v1/core/', headers={"x-forwarded-for": "172.18.0.5"})
-        assert resp_subnet2.status_code == 200
+
+def test_hmac_signing_development_bypass():
+    import os
+    from fastapi.testclient import TestClient
+    from app import create_app
+
+    original_deploy = os.environ.get("SPENDOO_DEPLOY")
+    os.environ["SPENDOO_DEPLOY"] = "false"
+
+    try:
+        app = create_app()
+        client = TestClient(app)
+
+        resp = client.get('/api/v1/core/')
+        assert resp.status_code == 200
     finally:
         if original_deploy is not None:
             os.environ["SPENDOO_DEPLOY"] = original_deploy

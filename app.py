@@ -7,7 +7,7 @@ from spendoo.forecasting.routes import router as forecasting_router
 from spendoo.chatbot.routes import router as chatbot_router
 from spendoo.anomaly_detection.routes import router as anomaly_router
 from spendoo.statistics.routes import router as statistics_router
-from spendoo.core.ip_middleware import IPRestrictionMiddleware
+from spendoo.core.hmac_middleware import HMACSigningMiddleware
 
 import os
 from fastapi.responses import RedirectResponse
@@ -19,12 +19,7 @@ def create_app(config: dict = None) -> FastAPI:
     async def root_redirect():
         return RedirectResponse(url="/docs")
 
-    # Add IP restriction middleware (only in production)
-    is_deploy = os.getenv("SPENDOO_DEPLOY", "false").lower() == "true"
-    if config and config.get("TESTING"):
-        is_deploy = False
-    if is_deploy:
-        app.add_middleware(IPRestrictionMiddleware)
+    app.add_middleware(HMACSigningMiddleware)
 
     # Versioned API router
     api_v1_router = APIRouter(prefix="/api/v1")
